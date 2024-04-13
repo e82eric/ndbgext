@@ -20,6 +20,7 @@ bld/
 [Bb]in/
 [Oo]bj/
 .idea/
+.vs/
 Tools/
 
 # Roslyn cache directories

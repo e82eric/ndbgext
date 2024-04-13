@@ -20,15 +20,13 @@ public class ClrUniqStack : DbgEngCommand
         Run();
     }
 
-    public void Run()
+    private void Run()
     {
         Dictionary<string, (int Count, ulong TotalSize)> sizes = new();
         List<(List<int> metadataTokens, List<ClrThread> threads)> uniqueStacks = new();
 
-        // DbgEngCommand has helper properties for DataTarget and all ClrRuntimes:
         foreach (ClrRuntime runtime in Runtimes)
         {
-            // Walk each thread in the process.
             foreach (ClrThread thread in runtime.Threads)
             {
                 if (!thread.IsAlive)

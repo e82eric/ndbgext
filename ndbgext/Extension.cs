@@ -48,4 +48,33 @@ public static unsafe class Extension
 
         return 0;
     }
+
+    [UnmanagedCallersOnly(EntryPoint = "dumpcdict", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int DumpCDict(nint pUnknown, nint args)
+    {
+        return _DumpConcurDict(pUnknown, args);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "dumpconcurdict", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int DumpConcurDict(nint pUnknown, nint args)
+    {
+        return _DumpConcurDict(pUnknown, args);
+    }
+
+    private static int _DumpConcurDict(nint pUnknown, nint args)
+    {
+        try
+        {
+            ConcurrentDictionary cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(ConcurrentDictionary)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
 }

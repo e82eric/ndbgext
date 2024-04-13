@@ -20,7 +20,7 @@ public class Threads : DbgEngCommand
         Run();
     }
 
-    public void Run()
+    private void Run()
     {
         foreach (ClrRuntime runtime in Runtimes)
         {

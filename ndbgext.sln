@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ndbgext", "ndbgext\ndbgext.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SameStacks", "SameStacks\SameStacks.csproj", "{818E8AED-8CC5-4AEB-AA7B-EBAA4F8080E4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FrameworkConcurentDictionaryConsole", "FrameworkConcurentDictionaryConsole\FrameworkConcurentDictionaryConsole.csproj", "{2697E744-98BF-4C67-B6C1-6138BF7141D0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{818E8AED-8CC5-4AEB-AA7B-EBAA4F8080E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{818E8AED-8CC5-4AEB-AA7B-EBAA4F8080E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{818E8AED-8CC5-4AEB-AA7B-EBAA4F8080E4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2697E744-98BF-4C67-B6C1-6138BF7141D0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2697E744-98BF-4C67-B6C1-6138BF7141D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2697E744-98BF-4C67-B6C1-6138BF7141D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2697E744-98BF-4C67-B6C1-6138BF7141D0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
