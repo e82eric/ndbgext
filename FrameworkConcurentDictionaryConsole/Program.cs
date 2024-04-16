@@ -22,6 +22,15 @@ namespace FrameworkConcurentDictionaryConsole
             dict2.TryAdd(5, 1);
             dict2.TryAdd(6, 1);
             dict2.TryAdd(7, 1);
+            var queue1 = new ConcurrentQueue<int>();
+            queue1.Enqueue(1);
+            queue1.Enqueue(2);
+            queue1.Enqueue(3);
+            var queue2 = new ConcurrentQueue<string>();
+            queue2.Enqueue("Str1");
+            queue2.Enqueue("Str2");
+            queue2.Enqueue("Str3");
+            queue2.Enqueue("Str4");
             Console.ReadLine();
         }
     }

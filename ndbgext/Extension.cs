@@ -77,4 +77,92 @@ public static unsafe class Extension
 
         return 0;
     }
+
+    [UnmanagedCallersOnly(EntryPoint = "dcq", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int dcd(nint pUnknown, nint args)
+    {
+        return _DumpConcurQueue(pUnknown, args);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "dumpconcurqueue", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int DumpConcurQueue(nint pUnknown, nint args)
+    {
+        return _DumpConcurQueue(pUnknown, args);
+    }
+
+    private static int _DumpConcurQueue(nint pUnknown, nint args)
+    {
+        try
+        {
+            ConcurrentQueueCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(ConcurrentQueueCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "tps", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int Tps(nint pUnknown, nint args)
+    {
+        return _ThreadPoolStats(pUnknown, args);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "threadpoolstats", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int ThreadPoolStats(nint pUnknown, nint args)
+    {
+        return _ThreadPoolStats(pUnknown, args);
+    }
+
+    private static readonly ThreadPool _threadPool = new ThreadPool(new ConcurrentQueue());
+    private static int _ThreadPoolStats(nint pUnknown, nint args)
+    {
+        try
+        {
+            ThreadPoolCommand cmd = new(pUnknown, _threadPool);
+            var arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(ThreadPoolCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "getmethodname", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int GetMethodName(nint pUnknown, nint args)
+    {
+        return _GetMethodName(pUnknown, args);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "gmn", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int GMN(nint pUnknown, nint args)
+    {
+        return _GetMethodName(pUnknown, args);
+    }
+
+    private static int _GetMethodName(nint pUnknown, nint args)
+    {
+        try
+        {
+            GetMethodNameCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(GetMethodNameCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
 }
