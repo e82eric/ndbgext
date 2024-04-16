@@ -49,7 +49,7 @@ public static unsafe class Extension
         return 0;
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "dumpcdict", CallConvs = new[] { typeof(CallConvStdcall) })]
+    [UnmanagedCallersOnly(EntryPoint = "dcd", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int DumpCDict(nint pUnknown, nint args)
     {
         return _DumpConcurDict(pUnknown, args);
