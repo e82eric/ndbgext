@@ -18,12 +18,12 @@ namespace ThreadPoolWithQueue
                 Thread.Sleep(TimeSpan.FromMinutes(3));
             }
 
-            for (int i = 0; i < 500; i++)
+            for (int i = 0; i < 5; i++)
             {
                 ThreadPool.QueueUserWorkItem(TestCallback, i);
             }
 
-            for (var i = 0; i < 2250; i++)
+            for (var i = 0; i < 2000; i++)
             {
                 var i1 = i;
 
@@ -36,6 +36,9 @@ namespace ThreadPoolWithQueue
                 Task.Run(ForTask);
             }
 
+
+            System.Threading.ThreadPool.GetAvailableThreads(out var availWorker, out var availIo);
+            Console.WriteLine("Avail worker{0} Avail io {1}");
             Console.ReadLine();
         }
     }

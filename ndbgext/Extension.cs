@@ -137,6 +137,28 @@ public static unsafe class Extension
         return 0;
     }
 
+    [UnmanagedCallersOnly(EntryPoint = "tpr", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int TPR(nint pUnknown, nint args)
+    {
+        return _ThreadPoolRunning(pUnknown, args);
+    }
+    private static int _ThreadPoolRunning(nint pUnknown, nint args)
+    {
+        try
+        {
+            ThreadPoolCommand cmd = new(pUnknown, _threadPool);
+            var arguments = Marshal.PtrToStringAnsi(args);
+            cmd.RunRunning(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(ThreadPoolCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "getmethodname", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int GetMethodName(nint pUnknown, nint args)
     {

@@ -1,6 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using DbgEngExtension;
 using Microsoft.Diagnostics.Runtime;
+using Microsoft.Diagnostics.Runtime.DacInterface;
 
 namespace ndbgext;
 
@@ -31,6 +32,7 @@ public class ConcurrentQueueCommand : DbgEngCommand
         {
             foreach (var runtime in Runtimes)
             {
+                runtime.DacLibrary.SOSDacInterface.
                 _queue.List(runtime);
             }
             return;
@@ -118,39 +120,45 @@ public class ConcurrentQueue
         while (current.IsValid && !current.IsNull)
         {
             var array = current.ReadObjectField("_slots").AsArray();
-            var headAndTail = current.ReadValueTypeField("_headAndTail");
-            var start = headAndTail.ReadField<Int32>("Head");
-            var end = headAndTail.ReadField<Int32>("Tail");
-            for (var i = start; i < end && i < array.Length; i++)
+            for (var i = 0; i < array.Length; i++)
             {
                 var itemStruct = array.GetStructValue(i);
                 Result itemResult = null;
                 try
                 {
                     var itemObject = itemStruct.ReadObjectField("Item");
-                    itemResult = new Result
+                    if (!itemObject.IsNull && itemObject.IsValid)
                     {
-                        Address = itemObject.Address,
-                        TypeName = itemStruct.Type.Name
-                    };
-                    if (itemObject.Type.ElementType == ClrElementType.String)
-                    {
-                        itemResult.Value = itemObject.AsString();
+                        itemResult = new Result
+                        {
+                            Address = itemObject.Address,
+                            TypeName = itemStruct.Type.Name
+                        };
+                        if (itemObject.Type.ElementType == ClrElementType.String)
+                        {
+                            itemResult.Value = itemObject.AsString();
+                        }
                     }
                 }
                 catch (Exception e)
                 {
-                    var innerItemStruct = itemStruct.ReadValueTypeField("Item");
-                    itemResult = new Result
+                    try
                     {
-                        Address = innerItemStruct.Address,
-                        TypeName = innerItemStruct.Type.Name
-                    };
-                    switch (innerItemStruct.Type.ElementType)
+                        var innerItemStruct = itemStruct.ReadValueTypeField("Item");
+                        itemResult = new Result
+                        {
+                            Address = innerItemStruct.Address,
+                            TypeName = innerItemStruct.Type.Name
+                        };
+                        switch (innerItemStruct.Type.ElementType)
+                        {
+                            case ClrElementType.Int32:
+                                itemResult.Value = itemStruct.ReadField<Int32>("Item").ToString();
+                                break;
+                        }
+                    }
+                    catch (Exception)
                     {
-                        case ClrElementType.Int32:
-                            itemResult.Value = itemStruct.ReadField<Int32>("Item").ToString();
-                            break;
                     }
                 }
 
