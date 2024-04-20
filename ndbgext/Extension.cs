@@ -13,6 +13,18 @@ public static unsafe class Extension
         return 0;
     }
 
+    [UnmanagedCallersOnly(EntryPoint = "help", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int Help(nint pUnknown, nint args)
+    {
+        Console.WriteLine("clruniqstack");
+        Console.WriteLine("threadpoolqueue (tpq) -detail");
+        Console.WriteLine("threadpoolstats (tps)");
+        Console.WriteLine("dumpconcurrentdict (dcd)");
+        Console.WriteLine("dumpconcurrentqueue (dcq)");
+        Console.WriteLine("getmetodname (dcq) [methodptr]");
+        return 0;
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "clruniqstack", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int UniqClrStack(nint pUnknown, nint args)
     {
@@ -55,7 +67,7 @@ public static unsafe class Extension
         return _DumpConcurDict(pUnknown, args);
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "dumpconcurdict", CallConvs = new[] { typeof(CallConvStdcall) })]
+    [UnmanagedCallersOnly(EntryPoint = "dumpconcurrentdict", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int DumpConcurDict(nint pUnknown, nint args)
     {
         return _DumpConcurDict(pUnknown, args);
@@ -84,7 +96,7 @@ public static unsafe class Extension
         return _DumpConcurQueue(pUnknown, args);
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "dumpconcurqueue", CallConvs = new[] { typeof(CallConvStdcall) })]
+    [UnmanagedCallersOnly(EntryPoint = "dumpconcurrentqueue", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int DumpConcurQueue(nint pUnknown, nint args)
     {
         return _DumpConcurQueue(pUnknown, args);
@@ -107,20 +119,20 @@ public static unsafe class Extension
         return 0;
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "tps", CallConvs = new[] { typeof(CallConvStdcall) })]
+    [UnmanagedCallersOnly(EntryPoint = "tpq", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int Tps(nint pUnknown, nint args)
     {
-        return _ThreadPoolStats(pUnknown, args);
+        return _ThreadPoolQueue(pUnknown, args);
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "threadpoolstats", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int ThreadPoolStats(nint pUnknown, nint args)
+    [UnmanagedCallersOnly(EntryPoint = "threadpoolqueue", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int ThreadPoolQueue(nint pUnknown, nint args)
     {
-        return _ThreadPoolStats(pUnknown, args);
+        return _ThreadPoolQueue(pUnknown, args);
     }
 
     private static readonly ThreadPool _threadPool = new ThreadPool(new ConcurrentQueue());
-    private static int _ThreadPoolStats(nint pUnknown, nint args)
+    private static int _ThreadPoolQueue(nint pUnknown, nint args)
     {
         try
         {
@@ -137,12 +149,18 @@ public static unsafe class Extension
         return 0;
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "tpr", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int TPR(nint pUnknown, nint args)
+    [UnmanagedCallersOnly(EntryPoint = "threadpoolstats", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int ThreadPoolStats(nint pUnknown, nint args)
     {
-        return _ThreadPoolRunning(pUnknown, args);
+        return _ThreadPoolStats(pUnknown, args);
     }
-    private static int _ThreadPoolRunning(nint pUnknown, nint args)
+
+    [UnmanagedCallersOnly(EntryPoint = "tps", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int TPS(nint pUnknown, nint args)
+    {
+        return _ThreadPoolStats(pUnknown, args);
+    }
+    private static int _ThreadPoolStats(nint pUnknown, nint args)
     {
         try
         {

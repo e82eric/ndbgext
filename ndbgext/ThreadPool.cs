@@ -16,10 +16,12 @@ public class ThreadPoolCommand : DbgEngCommand
 
     internal void Run(string args)
     {
+        var split = args.Split(' ');
+        var detail = split.Length > 0 && split[0] == "-detail";
         foreach (var runtime in Runtimes)
         {
             var isNetCore = Helper.IsNetCore(runtime);
-            _threadPool.Show(runtime, isNetCore);
+            _threadPool.Show(runtime, isNetCore, !detail);
         }
     }
 
@@ -124,7 +126,15 @@ public class ThreadPool
         return threadPoolWorkQueue;
     }
 
-    public void Show(ClrRuntime runtime, bool isNetCore)
+    private void WriteDetail(bool statsOnly, string format, params object?[]? args)
+    {
+        if (!statsOnly)
+        {
+            Console.WriteLine(format, args);
+        }
+    }
+
+    public void Show(ClrRuntime runtime, bool isNetCore, bool statsOnly)
     {
         var heap = runtime.Heap;
         ClrObject threadPoolWorkQueue = GetThreadPoolWorkQueue(heap);
@@ -137,10 +147,10 @@ public class ThreadPool
             int ctr = 0;
             IReadOnlyList<ThreadPoolItem> results = GetThreadPoolItems(isNetCore, runtime, threadPoolWorkQueue);
 
-            Console.WriteLine("global work item queue________________________________");
+            WriteDetail(statsOnly, "global work item queue________________________________");
             foreach (var result in results)
             {
-                Console.WriteLine("{0:X} {1} {2}", result.Address, result.Type, result.MethodName);
+                WriteDetail(statsOnly, "{0:X} {1} {2}", result.Address, result.Type, result.MethodName);
                 UpdateStats(_tasks, result.Type.ToString(), ref ctr);
             }
 
@@ -149,7 +159,7 @@ public class ThreadPool
                 .Select(group => new { MethodName = group.Key, Count = group.Count() })
                 .OrderBy(result => result.Count);
 
-            Console.WriteLine();
+            Console.WriteLine(string.Empty);
             Console.WriteLine("method stats________________________________");
             foreach (var countBy in countByMethod)
             {

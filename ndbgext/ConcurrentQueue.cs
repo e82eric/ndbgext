@@ -32,7 +32,6 @@ public class ConcurrentQueueCommand : DbgEngCommand
         {
             foreach (var runtime in Runtimes)
             {
-                runtime.DacLibrary.SOSDacInterface.
                 _queue.List(runtime);
             }
             return;

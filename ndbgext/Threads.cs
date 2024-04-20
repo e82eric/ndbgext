@@ -17,47 +17,106 @@ public class Threads : DbgEngCommand
 
     internal void Run(string args)
     {
-        Run();
+        var split = args.Split(' ');
+        var details = split.Length > 0 && split[0] == "-details";
+        Run(true, details);
     }
 
-    private void Run()
+    private void Run(bool methodStats, bool details)
     {
         foreach (ClrRuntime runtime in Runtimes)
         {
-            // Walk each thread in the process.
-            foreach (ClrThread thread in runtime.Threads)
+            var threadsItems = GetThreadItems(runtime);
+
+            if (methodStats)
             {
-                if (!thread.IsAlive)
-                    continue;
+                var countByMethod = threadsItems .GroupBy(r => r.MetadataToken);
 
-                ClrException? currException = thread.CurrentException;
-                if (currException is ClrException ex)
-                    Console.WriteLine("Exception: {0:X} ({1}), HRESULT={2:X}", ex.Address, ex.Type.Name, ex.HResult);
-
-                // Console.WriteLine("Thread {0:X}:", thread.OSThreadId);
-                ClrStackFrame firstManagedFrame = null;
-                foreach (var frame in thread.EnumerateStackTrace())
+                Console.WriteLine("--------By Method stats");
+                Console.WriteLine();
+                foreach (var c in countByMethod)
                 {
-                    if (frame.Kind == ClrStackFrameKind.ManagedMethod)
+                    var first = c.FirstOrDefault();
+                    if (first != null)
                     {
-                        firstManagedFrame = frame;
-                        break;
+                        Console.WriteLine(first.MethodName);
                     }
-                }
 
-                if (firstManagedFrame != null)
-                {
-                    Console.WriteLine("{0:X} {1}.{2}", thread.OSThreadId, firstManagedFrame.Method?.Type?.Name, firstManagedFrame.Method?.Name);
+                    var osThreadIs = c.Select(c => $"0x{c.OSThreadId:X}");
+                    var concatenatedThreadIds = string.Join(',', osThreadIs);
+                    Console.WriteLine("Threads: {0}", concatenatedThreadIds);
+                    Console.WriteLine();
                 }
-                else
-                {
-                    Console.WriteLine("{0:X} No Managed Frame", thread.OSThreadId);
-                }
-
             }
-            Console.WriteLine();
-            Console.WriteLine("----------------------------------");
-            Console.WriteLine();
+
+            if (details)
+            {
+                Console.WriteLine("--------Details");
+                Console.WriteLine();
+                foreach (var threadsItem in threadsItems)
+                {
+                    Console.WriteLine("{0:X}|{1}|{2}|{3}", threadsItem.OSThreadId, threadsItem.MethodName, threadsItem.LockCount, threadsItem.Exception);
+                }
+            }
         }
     }
+
+    private IReadOnlyList<ThreadsItem> GetThreadItems(ClrRuntime runtime)
+    {
+        var result = new List<ThreadsItem>();
+        foreach (ClrThread thread in runtime.Threads)
+        {
+            if (!thread.IsAlive)
+                continue;
+
+            ClrStackFrame firstManagedFrame = null;
+            foreach (var frame in thread.EnumerateStackTrace())
+            {
+                if (frame.Kind == ClrStackFrameKind.ManagedMethod)
+                {
+                    firstManagedFrame = frame;
+                    break;
+                }
+            }
+
+            var firstManagedFrameStr = string.Empty;
+            if (firstManagedFrame != null)
+            {
+                firstManagedFrameStr = string.Format("{0}.{1}", firstManagedFrame.Method?.Type?.Name, firstManagedFrame.Method?.Name);
+            }
+            else
+            {
+                firstManagedFrameStr = string.Format("No Managed Frame");
+            }
+
+            ClrException? currException = thread.CurrentException;
+            var exceptionStr = string.Empty;
+            if (currException is ClrException ex)
+            {
+                exceptionStr = string.Format("Exception: {0:X} ({1}), HRESULT={2:X}", ex.Address, ex.Type.Name, ex.HResult);
+            }
+
+            var item = new ThreadsItem
+            {
+                OSThreadId = thread.OSThreadId,
+                LockCount = thread.LockCount,
+                Exception = exceptionStr,
+                MetadataToken = firstManagedFrame?.Method?.MetadataToken,
+                MethodName = firstManagedFrameStr
+            };
+
+            result.Add(item);
+        }
+
+        return result;
+    }
+}
+
+class ThreadsItem
+{
+    public uint OSThreadId { get; set; }
+    public int? MetadataToken { get; set; }
+    public string MethodName { get; set; }
+    public uint LockCount { get; set; }
+    public string Exception { get; set; }
 }
