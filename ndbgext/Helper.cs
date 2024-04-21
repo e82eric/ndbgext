@@ -32,4 +32,76 @@ public static class Helper
 
         return false;
     }
+
+    public static string GetDelegateMethod(ClrRuntime runtime, ClrObject itemObj)
+    {
+        ClrObject callback;
+        var result = string.Empty;
+        if (itemObj.Type.Name == "System.Threading.Tasks.Task")
+        {
+            callback = itemObj.ReadObjectField("m_action");
+            //result.Type = ThreadRoot.Task;
+        }
+        else
+        {
+            if (!itemObj.TryReadObjectField("_callback", out callback))
+            {
+                itemObj.TryReadObjectField("callback", out callback);
+            }
+
+            if (!callback.IsNull)
+            {
+                //result.Type = ThreadRoot.WorkItem;
+            }
+            else
+            {
+                result = "[no callback]";
+                return result;
+            }
+        }
+
+        ClrObject target = default(ClrObject);
+        if (!callback.TryReadObjectField("_target", out target))
+        {
+            result = "[no callback target]";
+            return result;
+        }
+
+        if (target.Type == null)
+        {
+            //Is this going to be in hex?
+            result = $"[target=0x{(ulong)target}";
+            return result;
+        }
+
+        var methodPtrVal = callback.ReadField<ulong>("_methodPtr");
+        var method = runtime.GetMethodByInstructionPointer(methodPtrVal);
+        if (method == null)
+        {
+            var methodPtrAuxVal = callback.ReadField<ulong>("_methodPtrAux");
+            method = runtime.GetMethodByInstructionPointer(methodPtrAuxVal);
+        }
+
+        if (method != null)
+        {
+            // anonymous method
+            if (method.Type.Name == target.Type.Name)
+            {
+                result = $"{target.Type.Name}.{method.Name}";
+            }
+            // method is implemented by an class inherited from targetType
+            // ... or a simple delegate indirection to a static/instance method
+            else if(target.Type.Name == "System.Threading.WaitCallback"
+                || target.Type.Name.StartsWith("System.Action<"))
+            {
+                result = $"{method.Type.Name}.{method.Name}";
+            }
+            else
+            {
+                result = $"{target.Type.Name}.{method.Type.Name}.{method.Name}";
+            }
+        }
+
+        return result;
+    }
 }

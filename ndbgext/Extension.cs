@@ -22,6 +22,7 @@ public static unsafe class Extension
         Console.WriteLine("dumpconcurrentdict (dcd)");
         Console.WriteLine("dumpconcurrentqueue (dcq)");
         Console.WriteLine("getmetodname (dcq) [methodptr]");
+        Console.WriteLine("tasks (tks) -detail");
         return 0;
     }
 
@@ -200,6 +201,36 @@ public static unsafe class Extension
         catch (Exception e)
         {
             Console.Error.WriteLine($"Failed to run {nameof(GetMethodNameCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "tasks", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int Tasks(nint pUnknown, nint args)
+    {
+        return _Tasks(pUnknown, args);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "tks", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int TKS(nint pUnknown, nint args)
+    {
+        return _Tasks(pUnknown, args);
+    }
+
+    private static Tasks _tasks = new Tasks();
+    private static int _Tasks(nint pUnknown, nint args)
+    {
+        try
+        {
+            TasksCommand cmd = new(_tasks, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(TasksCommand)} command.");
             Console.Error.WriteLine(e);
         }
 
