@@ -45,6 +45,7 @@ public class Threads : DbgEngCommand
                     var osThreadIs = c.Select(c => $"0x{c.OSThreadId:X}");
                     var concatenatedThreadIds = string.Join(',', osThreadIs);
                     Console.WriteLine("Threads: {0}", concatenatedThreadIds);
+                    Console.WriteLine("Number of threads: {0}", osThreadIs.Count());
                     Console.WriteLine();
                 }
             }

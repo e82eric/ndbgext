@@ -236,4 +236,27 @@ public static unsafe class Extension
 
         return 0;
     }
+
+    [UnmanagedCallersOnly(EntryPoint = "dumpgen", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int DumpGen(nint pUnknown, nint args)
+    {
+        return _DumGen(pUnknown, args);
+    }
+
+    private static int _DumGen(nint pUnknown, nint args)
+    {
+        try
+        {
+            GcGenerationInfoCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(GcGenerationInfoCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
 }
