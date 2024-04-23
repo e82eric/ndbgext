@@ -23,6 +23,8 @@ public static unsafe class Extension
         Console.WriteLine("dumpconcurrentqueue (dcq)");
         Console.WriteLine("getmetodname (dcq) [methodptr]");
         Console.WriteLine("tasks (tks) -detail");
+        Console.WriteLine("dumpgen [gen0|gen1|gen2]");
+        Console.WriteLine("blockinginfo");
         return 0;
     }
 
@@ -254,6 +256,30 @@ public static unsafe class Extension
         catch (Exception e)
         {
             Console.Error.WriteLine($"Failed to run {nameof(GcGenerationInfoCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
+    private static BlockingInfoProvider _thread = new BlockingInfoProvider();
+    [UnmanagedCallersOnly(EntryPoint = "blockinginfo", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int BlockingInfo(nint pUnknown, nint args)
+    {
+        return _BlockingInfo(pUnknown, args);
+    }
+    
+    private static int _BlockingInfo(nint pUnknown, nint args)
+    {
+        try
+        {
+            BlockingInfoCommand cmd = new(_thread, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(BlockingInfoCommand)} command.");
             Console.Error.WriteLine(e);
         }
 
