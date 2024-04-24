@@ -25,6 +25,7 @@ public static unsafe class Extension
         Console.WriteLine("tasks (tks) -detail");
         Console.WriteLine("dumpgen [gen0|gen1|gen2]");
         Console.WriteLine("blockinginfo");
+        Console.WriteLine("heapstat");
         return 0;
     }
 
@@ -245,11 +246,12 @@ public static unsafe class Extension
         return _DumGen(pUnknown, args);
     }
 
+    private static readonly GcGenerationInfoProvider GcGenerationInfoProvider = new GcGenerationInfoProvider();
     private static int _DumGen(nint pUnknown, nint args)
     {
         try
         {
-            GcGenerationInfoCommand cmd = new(pUnknown);
+            GcGenerationInfoCommand cmd = new(GcGenerationInfoProvider, pUnknown);
             string? arguments = Marshal.PtrToStringAnsi(args);
             cmd.Run(arguments ?? "");
         }
@@ -262,7 +264,7 @@ public static unsafe class Extension
         return 0;
     }
 
-    private static BlockingInfoProvider _thread = new BlockingInfoProvider();
+    private static readonly BlockingInfoProvider BlockingInfoProvider = new BlockingInfoProvider();
     [UnmanagedCallersOnly(EntryPoint = "blockinginfo", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int BlockingInfo(nint pUnknown, nint args)
     {
@@ -273,7 +275,31 @@ public static unsafe class Extension
     {
         try
         {
-            BlockingInfoCommand cmd = new(_thread, pUnknown);
+            BlockingInfoCommand cmd = new(BlockingInfoProvider, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(BlockingInfoCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "heapstat", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int HeapStat(nint pUnknown, nint args)
+    {
+        return _HeapStat(pUnknown, args);
+    }
+
+    private static readonly HeapStatProvider HeapStatProvider = new HeapStatProvider();
+    private static int _HeapStat(nint pUnknown, nint args)
+    {
+        try
+        {
+            HeapStatCommand cmd = new(HeapStatProvider, pUnknown);
             string? arguments = Marshal.PtrToStringAnsi(args);
             cmd.Run(arguments ?? "");
         }

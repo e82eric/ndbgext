@@ -1,14 +1,16 @@
-﻿using System.Data.Common;
-using DbgEngExtension;
+﻿using DbgEngExtension;
 using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
 
 public class GcGenerationInfoCommand : DbgEngCommand
 {
-    public GcGenerationInfoCommand(nint pUnknown, bool redirectConsoleOutput = true)
+    private readonly GcGenerationInfoProvider _provider;
+
+    public GcGenerationInfoCommand(GcGenerationInfoProvider provider, nint pUnknown, bool redirectConsoleOutput = true)
         : base(pUnknown, redirectConsoleOutput)
     {
+        _provider = provider;
     }
 
     internal void Run(string args)
@@ -41,29 +43,20 @@ public class GcGenerationInfoCommand : DbgEngCommand
 
         foreach (var runtime in Runtimes)
         {
-            var generationItems = new GcGenerationInfo().GetGenerationItems(runtime, genNumber);
-            var byType = generationItems.GroupBy(gi => gi.TypeName);
-            var statsByType = byType.Select(group => new
-            {
-                TypeName = group.Key, MethodTable = group.FirstOrDefault()?.MethodTable, Count = group.Count(), Size = group.Sum(g => (float)g.Size)
-            }).OrderBy(s => s.Size);
-
-            foreach (var typeStat in statsByType)
-            {
-                Console.WriteLine("{0:X} {1} {2} {3}", typeStat.MethodTable, typeStat.Size, typeStat.Count, typeStat.TypeName);
-            }
-
-            Console.WriteLine("Total Objects: {0}, Total Size: {1}", generationItems.Count(),
-                generationItems.Sum(i => (float)i.Size));
+            Console.WriteLine("Server Mode: {0}", runtime.Heap.IsServer);
+            Console.WriteLine("Number of heaps: {0}", runtime.Heap.LogicalHeapCount);
+            
+            var generationItems = _provider.GetGenerationItems(runtime, genNumber);
+            Helper.PrintHeapItems(generationItems);
         }
     }
 }
 
-public class GcGenerationInfo
+public class GcGenerationInfoProvider
 {
-    public IReadOnlyList<GenerationItem> GetGenerationItems(ClrRuntime runtime, int genNumber)
+    public IReadOnlyList<HeapItem> GetGenerationItems(ClrRuntime runtime, int genNumber)
     {
-        var result = new List<GenerationItem>();
+        var result = new List<HeapItem>();
         var heap = runtime.Heap;
         foreach (var segment in heap.Segments)
         {
@@ -76,7 +69,7 @@ public class GcGenerationInfo
                     var type = segment.Heap.GetObject(address);
                     if (!type.IsFree)
                     {
-                        var item = new GenerationItem
+                        var item = new HeapItem
                         {
                             TypeName = type.Type.Name,
                             Size = type.Size,
@@ -91,11 +84,4 @@ public class GcGenerationInfo
 
         return result;
     }
-}
-
-public class GenerationItem
-{
-    public ulong MethodTable { get; set; }
-    public string TypeName { get; set; }
-    public ulong Size { get; set; }
 }

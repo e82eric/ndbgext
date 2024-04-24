@@ -104,4 +104,45 @@ public static class Helper
 
         return result;
     }
+    
+    public static string FormatBytes(float bytes)
+    {
+        const int scale = 1024;
+        string[] units = { "bytes", "KB", "MB", "GB", "TB", "PB", "EB" }; // Extend with more units if needed.
+    
+        if (bytes == 0)
+        {
+            return "0 bytes";
+        }
+    
+        int unitIndex = 0;
+        double displayValue = bytes;
+        while (displayValue >= scale && unitIndex < units.Length - 1)
+        {
+            displayValue /= scale;
+            unitIndex++;
+        }
+    
+        return $"{displayValue:N2} {units[unitIndex]}";
+    }
+
+    public static void PrintHeapItems(IReadOnlyList<HeapItem> items)
+    {
+        var byType = items.GroupBy(i => i.TypeName);
+            
+        var statsByType = byType.Select(group => new
+        {
+            TypeName = group.Key,
+            group.FirstOrDefault()?.MethodTable,
+            Count = group.Count(),
+            Size = group.Sum(g => (float)g.Size)
+        }).OrderBy(s => s.Size);
+            
+        foreach (var typeStat in statsByType)
+        {
+            Console.WriteLine("{0:X} {1} {2:N0} {3}", typeStat.MethodTable, Helper.FormatBytes(typeStat.Size), typeStat.Count, typeStat.TypeName);
+        }
+
+        Console.WriteLine("Total Objects: {0:N0}, Total Size: {1}", items.Count, Helper.FormatBytes(items.Sum(i => (float)i.Size)));
+    }
 }
