@@ -21,7 +21,7 @@ public static unsafe class Extension
         Console.WriteLine("threadpoolstats (tps)");
         Console.WriteLine("dumpconcurrentdict (dcd)");
         Console.WriteLine("dumpconcurrentqueue (dcq)");
-        Console.WriteLine("getmetodname (dcq) [methodptr]");
+        Console.WriteLine("getmetodname (gmn) [methodptr]");
         Console.WriteLine("tasks (tks) -detail");
         Console.WriteLine("dumpgen [gen0|gen1|gen2]");
         Console.WriteLine("blockinginfo");
@@ -306,6 +306,30 @@ public static unsafe class Extension
         catch (Exception e)
         {
             Console.Error.WriteLine($"Failed to run {nameof(BlockingInfoCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "findref", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int FindRef(nint pUnknown, nint args)
+    {
+        return _FindRef(pUnknown, args);
+    }
+    
+    private static readonly FindRefProvider FindRefProvider = new();
+    private static int _FindRef(nint pUnknown, nint args)
+    {
+        try
+        {
+            FindRefCommand cmd = new(FindRefProvider, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(FindRefCommand)} command.");
             Console.Error.WriteLine(e);
         }
 
