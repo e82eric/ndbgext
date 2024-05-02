@@ -26,6 +26,8 @@ public static unsafe class Extension
         Console.WriteLine("dumpgen [gen0|gen1|gen2]");
         Console.WriteLine("blockinginfo");
         Console.WriteLine("heapstat");
+        Console.WriteLine("decompile instructionpointer");
+        Console.WriteLine("savemodule modulename");
         return 0;
     }
 
@@ -354,6 +356,30 @@ public static unsafe class Extension
         catch (Exception e)
         {
             Console.Error.WriteLine($"Failed to run {nameof(SaveModuleCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "decompile", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int Decompile(nint pUnknown, nint args)
+    {
+        return _DecompileCurrentFrame(pUnknown, args);
+    }
+    
+    private static readonly DecompileProvider DecompileProvider = new();
+    private static int _DecompileCurrentFrame(nint pUnknown, nint args)
+    {
+        try
+        {
+            DecompileCommand cmd = new(DecompileProvider, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(DecompileCommand)} command.");
             Console.Error.WriteLine(e);
         }
 
