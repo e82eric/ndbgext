@@ -335,4 +335,28 @@ public static unsafe class Extension
 
         return 0;
     }
+    
+    [UnmanagedCallersOnly(EntryPoint = "savemodule", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int SaveModule(nint pUnknown, nint args)
+    {
+        return _SaveModule(pUnknown, args);
+    }
+    
+    private static readonly SaveModuleProvider SaveModuleProvider = new();
+    private static int _SaveModule(nint pUnknown, nint args)
+    {
+        try
+        {
+            SaveModuleCommand cmd = new(SaveModuleProvider, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(SaveModuleCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
 }

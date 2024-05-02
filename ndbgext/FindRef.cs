@@ -11,7 +11,6 @@ public class FindRefCommand : DbgEngCommand
         : base(pUnknown, redirectConsoleOutput)
     {
         _provider = provider;
-        _provider = provider;
     }
     
     internal void Run(string args)
