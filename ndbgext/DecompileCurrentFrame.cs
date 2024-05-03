@@ -39,6 +39,14 @@ public class DecompileCommand : DbgEngCommand
 
 public class DecompileProvider
 {
+    private readonly Decompiler _decompiler;
+    private readonly DllExtractor _dllExtractor;
+
+    public DecompileProvider(Decompiler decompiler, DllExtractor dllExtractor)
+    {
+        _decompiler = decompiler;
+        _dllExtractor = dllExtractor;
+    }
     public void Run(ClrRuntime runtime, ulong instructionPointer)
     {
         ClrMethod clrMethod = null;
@@ -63,6 +71,13 @@ public class DecompileProvider
         {
             var ilOffset = clrMethod.GetILOffset(instructionPointer);
             Console.WriteLine("{0} {1} {2}", clrMethod.Name, clrMethod.MetadataToken, ilOffset);
+
+            using
+            var memoryStream = new MemoryStream();
+            _dllExtractor.Extract(runtime.DataTarget.DataReader, clrMethod.Type.Module.ImageBase, memoryStream);
+            var code = _decompiler.Decompile(clrMethod.Type.Module.Name, memoryStream, clrMethod, ilOffset);
+            
+            Console.WriteLine(code);
         }
     }
 }

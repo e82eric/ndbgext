@@ -344,7 +344,7 @@ public static unsafe class Extension
         return _SaveModule(pUnknown, args);
     }
     
-    private static readonly SaveModuleProvider SaveModuleProvider = new();
+    private static readonly SaveModuleProvider SaveModuleProvider = new(new DllExtractor());
     private static int _SaveModule(nint pUnknown, nint args)
     {
         try
@@ -368,7 +368,7 @@ public static unsafe class Extension
         return _DecompileCurrentFrame(pUnknown, args);
     }
     
-    private static readonly DecompileProvider DecompileProvider = new();
+    private static readonly DecompileProvider DecompileProvider = new(new Decompiler(), new DllExtractor());
     private static int _DecompileCurrentFrame(nint pUnknown, nint args)
     {
         try
