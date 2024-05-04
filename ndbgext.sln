@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThreadPoolWithQueue", "Thre
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Decompiler", "Decompiler\Decompiler.csproj", "{CB519A5F-7A8E-41A3-8149-068BC148967B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClrMdHost", "ClrMdHost\ClrMdHost.csproj", "{F5776CD6-F3FD-4DB8-A858-ECB158E29ACD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 		{CB519A5F-7A8E-41A3-8149-068BC148967B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CB519A5F-7A8E-41A3-8149-068BC148967B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CB519A5F-7A8E-41A3-8149-068BC148967B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F5776CD6-F3FD-4DB8-A858-ECB158E29ACD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F5776CD6-F3FD-4DB8-A858-ECB158E29ACD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F5776CD6-F3FD-4DB8-A858-ECB158E29ACD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F5776CD6-F3FD-4DB8-A858-ECB158E29ACD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

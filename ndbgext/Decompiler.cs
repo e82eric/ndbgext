@@ -3,22 +3,38 @@ using System.Reflection.PortableExecutable;
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.CSharp.OutputVisitor;
+using ICSharpCode.Decompiler.IL;
 using ICSharpCode.Decompiler.Metadata;
 using ICSharpCode.Decompiler.TypeSystem;
 using Microsoft.Diagnostics.Runtime;
+using SequencePoint = ICSharpCode.Decompiler.DebugInfo.SequencePoint;
 
 namespace ndbgext;
 
 public class Decompiler
 {
-    public string Decompile(string filePath, Stream stream, ClrMethod method, int ilOffset)
+    private readonly DllExtractor _dllExtractor;
+
+    public Decompiler(DllExtractor dllExtractor)
     {
-        stream.Seek(0, SeekOrigin.Begin);
-        var peFile = new PEFile(
-            filePath,
-            stream,
-            streamOptions: PEStreamOptions.PrefetchEntireImage,
-            metadataOptions: new DecompilerSettings().ApplyWindowsRuntimeProjections ? MetadataReaderOptions.ApplyWindowsRuntimeProjections : MetadataReaderOptions.None );
+        _dllExtractor = dllExtractor;
+    }
+    public string Decompile(ClrRuntime runtime, string filePath, ClrMethod method, IList<int> ilOffsets, string nextMethodName)
+    {
+        PEFile peFile;
+        using (var memoryStream = new MemoryStream())
+        {
+            _dllExtractor.Extract(runtime.DataTarget.DataReader, method.Type.Module.ImageBase, memoryStream);
+
+            memoryStream.Seek(0, SeekOrigin.Begin);
+            peFile = new PEFile(
+                filePath,
+                memoryStream,
+                streamOptions: PEStreamOptions.PrefetchEntireImage,
+                metadataOptions: new DecompilerSettings().ApplyWindowsRuntimeProjections
+                    ? MetadataReaderOptions.ApplyWindowsRuntimeProjections
+                    : MetadataReaderOptions.None);
+        }
 
         var settings = new DecompilerSettings
         {
@@ -32,7 +48,7 @@ public class Decompiler
         var typeSystem = new DecompilerTypeSystem(peFile, resolver);
         var decompiler = new CSharpDecompiler(typeSystem, settings);
         var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.FindType(new FullTypeName(method.Type.Name)).GetDefinition();
-        var ilSpyMethod = typeDefinition.Methods.FirstOrDefault(m => m.MetadataToken.GetHashCode() == method.MetadataToken);
+        var ilSpyMethod = typeDefinition?.Methods.FirstOrDefault(m => m.MetadataToken.GetHashCode() == method.MetadataToken);
 
         if (ilSpyMethod != null)
         {
@@ -41,31 +57,74 @@ public class Decompiler
             var syntaxTree = decompiler.Decompile(ilSpyMethod.MetadataToken);
             syntaxTree.AcceptVisitor(new CSharpOutputVisitor(tokenWriter, settings.CSharpFormattingOptions));
             var sequencePoints = decompiler.CreateSequencePoints(syntaxTree);
-            var first = sequencePoints.First();
-
-            ICSharpCode.Decompiler.DebugInfo.SequencePoint? found = null;
-            foreach (ICSharpCode.Decompiler.DebugInfo.SequencePoint? point in first.Value)
-            {
-                if (ilOffset >= point.Offset && ilOffset <= point.EndOffset)
-                {
-                    found = point;
-                }
-            }
-
-            if (found != null)
-            {
-                Console.WriteLine("Line {0} StartChar {1}", found.StartLine, found.StartColumn);
-            }
-
             var sw = new StringWriter();
             syntaxTree.AcceptVisitor(new CSharpOutputVisitor(sw, settings.CSharpFormattingOptions));
             var decompiledMethod = sw.ToString();
-
             var split = decompiledMethod.Split('\n');
-            split[found.StartLine - 1] = ">>" + split[found.StartLine - 1];
-            
-            return string.Join("\n", split);
+
+            var lineMatches = new List<LineMatch>(ilOffsets.Count);
+            if (sequencePoints != null && sequencePoints.Count > 0)
+            {
+                var sps = sequencePoints.First();
+                foreach (var offset in ilOffsets)
+                {
+                    var sp = FindSeqPointByOffset(offset, sps);
+                    if (split.Length >= sp.StartLine)
+                    {
+                        if (split[sp.StartLine - 1].Contains(nextMethodName))
+                        {
+                            lineMatches.Add(new LineMatch{ lineNumber = sp.StartLine, methodNameMatches = true});
+                        }
+                        else
+                        {
+                            lineMatches.Add(new LineMatch{ lineNumber = sp.StartLine, methodNameMatches = false});
+                        }
+                    }
+                }
+                
+                var moreThanOneOffset = lineMatches.Count > 1;
+                var matchSymbol = moreThanOneOffset ? "**" : ">>";
+                var nonMatchSymbol = moreThanOneOffset ? "??" : ">>";
+                if (moreThanOneOffset)
+                {
+                    Console.WriteLine("More than one ilOffset was found for instruction pointer. Symbols:" +
+                                      " ** (method name matches) ?? (method name does not match)");
+                }
+
+                foreach (var lineMatch in lineMatches)
+                {
+                    var symbol = lineMatch.methodNameMatches ? matchSymbol : nonMatchSymbol;
+                    split[lineMatch.lineNumber - 1] = symbol + split[lineMatch.lineNumber - 1];
+                }
+                
+                return string.Join("\n", split);
+            }
+
+            Console.WriteLine("Could not find source line for instruction pointer");
+            return decompiledMethod;
         }
+        
+        Console.WriteLine("WARN: Method not found");
         return string.Empty;
+    }
+
+    private static SequencePoint? FindSeqPointByOffset(int ilOffset, KeyValuePair<ILFunction, List<SequencePoint>> first)
+    {
+        SequencePoint? result = null;
+        foreach (var point in first.Value)
+        {
+            if (ilOffset >= point.Offset && ilOffset <= point.EndOffset)
+            {
+                result = point;
+            }
+        }
+
+        return result;
+    }
+
+    struct LineMatch
+    {
+        public int lineNumber;
+        public bool methodNameMatches;
     }
 }

@@ -83,13 +83,13 @@ public static unsafe class Extension
     {
         try
         {
-            ConcurrentDictionary cmd = new(pUnknown);
+            ConcurrentDictionaryCommand cmd = new(pUnknown);
             string? arguments = Marshal.PtrToStringAnsi(args);
             cmd.Run(arguments ?? "");
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"Failed to run {nameof(ConcurrentDictionary)} command.");
+            Console.Error.WriteLine($"Failed to run {nameof(ConcurrentDictionaryCommand)} command.");
             Console.Error.WriteLine(e);
         }
 
@@ -368,7 +368,7 @@ public static unsafe class Extension
         return _DecompileCurrentFrame(pUnknown, args);
     }
     
-    private static readonly DecompileProvider DecompileProvider = new(new Decompiler(), new DllExtractor());
+    private static readonly DecompileProvider DecompileProvider = new(new Decompiler(new DllExtractor()));
     private static int _DecompileCurrentFrame(nint pUnknown, nint args)
     {
         try

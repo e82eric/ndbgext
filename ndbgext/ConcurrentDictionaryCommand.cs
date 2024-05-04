@@ -4,7 +4,7 @@ using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
 
-public class ConcurrentDictionary : DbgEngCommand
+public class ConcurrentDictionaryCommand : DbgEngCommand
 {
     class Entry
     {
@@ -36,12 +36,12 @@ public class ConcurrentDictionary : DbgEngCommand
         {ClrElementType.Double, (type, fieldName) => type.ReadField<Double>(fieldName).ToString() },
     };
 
-    public ConcurrentDictionary(nint pUnknown, bool redirectConsoleOutput = true)
+    public ConcurrentDictionaryCommand(nint pUnknown, bool redirectConsoleOutput = true)
         : base(pUnknown, redirectConsoleOutput)
     {
     }
 
-    public ConcurrentDictionary(IDisposable dbgeng, bool redirectConsoleOutput = false)
+    public ConcurrentDictionaryCommand(IDisposable dbgeng, bool redirectConsoleOutput = false)
         : base(dbgeng, redirectConsoleOutput)
     {
     }

@@ -40,16 +40,15 @@ public class DecompileCommand : DbgEngCommand
 public class DecompileProvider
 {
     private readonly Decompiler _decompiler;
-    private readonly DllExtractor _dllExtractor;
 
-    public DecompileProvider(Decompiler decompiler, DllExtractor dllExtractor)
+    public DecompileProvider(Decompiler decompiler)
     {
         _decompiler = decompiler;
-        _dllExtractor = dllExtractor;
     }
     public void Run(ClrRuntime runtime, ulong instructionPointer)
     {
-        ClrMethod clrMethod = null;
+        ClrMethod? nextClrMethod = null;
+        ClrMethod? clrMethod = null;
         foreach (var clrThread in runtime.Threads)
         {
             foreach (var frame in clrThread.EnumerateStackTrace())
@@ -59,6 +58,8 @@ public class DecompileProvider
                     clrMethod = frame.Method;
                     break;
                 }
+
+                nextClrMethod = frame.Method;
             }
 
             if (clrMethod != null)
@@ -70,13 +71,19 @@ public class DecompileProvider
         if (clrMethod != null)
         {
             var ilOffset = clrMethod.GetILOffset(instructionPointer);
+            var ilOffsets = new List<int>();
+            foreach (var ilInfo in clrMethod.ILOffsetMap)
+            {
+                if (ilInfo.StartAddress <= instructionPointer && ilInfo.EndAddress >= instructionPointer)
+                {
+                    if (ilInfo.ILOffset >= 0 && ilInfo.EndAddress - ilInfo.StartAddress > 0)
+                    {
+                        ilOffsets.Add(ilInfo.ILOffset);
+                    }
+                }
+            }
             Console.WriteLine("{0} {1} {2}", clrMethod.Name, clrMethod.MetadataToken, ilOffset);
-
-            using
-            var memoryStream = new MemoryStream();
-            _dllExtractor.Extract(runtime.DataTarget.DataReader, clrMethod.Type.Module.ImageBase, memoryStream);
-            var code = _decompiler.Decompile(clrMethod.Type.Module.Name, memoryStream, clrMethod, ilOffset);
-            
+            var code = _decompiler.Decompile(runtime, clrMethod.Type.Module.Name, clrMethod, ilOffsets, nextClrMethod?.Name);
             Console.WriteLine(code);
         }
     }
