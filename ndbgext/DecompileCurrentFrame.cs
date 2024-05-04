@@ -16,6 +16,10 @@ public class DecompileCommand : DbgEngCommand
     internal void Run(string args)
     {
         var arguments = args.Split(' ');
+        if (arguments.Length != 1)
+        {
+            Console.WriteLine("missing instruction pointer address");
+        }
         var instructionpointer = arguments[0];
         if (instructionpointer.StartsWith("0x"))
         {
@@ -33,6 +37,10 @@ public class DecompileCommand : DbgEngCommand
             {
                 _provider.Run(runtime, parsedInstructionPointer);
             }
+        }
+        else
+        {
+            Console.WriteLine("Could not parse {0} as address", instructionpointer);
         }
     }
 }
@@ -82,9 +90,14 @@ public class DecompileProvider
                     }
                 }
             }
+            
             Console.WriteLine("{0} {1} {2}", clrMethod.Name, clrMethod.MetadataToken, ilOffset);
             var code = _decompiler.Decompile(runtime, clrMethod.Type.Module.Name, clrMethod, ilOffsets, nextClrMethod?.Name);
             Console.WriteLine(code);
+        }
+        else
+        {
+            Console.WriteLine("Could not file method frame/method for {0:X}", instructionPointer);
         }
     }
 }

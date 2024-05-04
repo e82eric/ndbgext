@@ -41,6 +41,7 @@ public class Decompiler
             LoadInMemory = true,
             ThrowOnAssemblyResolveErrors = false
         };
+        //This can probably be replaced with a dummy resolver or the DbgEngAssemblyResolver (I am not sure this results in any better symbols)
         var resolver = new UniversalAssemblyResolver(filePath, settings.ThrowOnAssemblyResolveErrors,
             peFile.DetectTargetFrameworkId(), peFile.DetectRuntimePack(),
             settings.LoadInMemory ? PEStreamOptions.PrefetchMetadata : PEStreamOptions.Default,
@@ -65,6 +66,7 @@ public class Decompiler
             var lineMatches = new List<LineMatch>(ilOffsets.Count);
             if (sequencePoints != null && sequencePoints.Count > 0)
             {
+                //Since we are decompiling at the method level there should only be one set of sequence points
                 var sps = sequencePoints.First();
                 foreach (var offset in ilOffsets)
                 {
