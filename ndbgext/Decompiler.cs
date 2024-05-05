@@ -41,16 +41,15 @@ public class Decompiler
             LoadInMemory = true,
             ThrowOnAssemblyResolveErrors = false
         };
-        //This can probably be replaced with a dummy resolver or the DbgEngAssemblyResolver (I am not sure this results in any better symbols)
-        var resolver = new UniversalAssemblyResolver(filePath, settings.ThrowOnAssemblyResolveErrors,
-            peFile.DetectTargetFrameworkId(), peFile.DetectRuntimePack(),
-            settings.LoadInMemory ? PEStreamOptions.PrefetchMetadata : PEStreamOptions.Default,
-            settings.ApplyWindowsRuntimeProjections ? MetadataReaderOptions.ApplyWindowsRuntimeProjections : MetadataReaderOptions.None);
+        
+        var resolver = new DbgEngAssemblyResolver(new PeFileCache(_dllExtractor, runtime),
+             peFile, settings, method.Type.Module.Name);
         var typeSystem = new DecompilerTypeSystem(peFile, resolver);
         var decompiler = new CSharpDecompiler(typeSystem, settings);
-        var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.FindType(new FullTypeName(method.Type.Name)).GetDefinition();
+        var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.GetAllTypeDefinitions()
+            .FirstOrDefault(t => t.MetadataToken.GetHashCode() == method.Type.MetadataToken);
+        
         var ilSpyMethod = typeDefinition?.Methods.FirstOrDefault(m => m.MetadataToken.GetHashCode() == method.MetadataToken);
-
         if (ilSpyMethod != null)
         {
             var stringWriter = new StringWriter();
@@ -105,7 +104,7 @@ public class Decompiler
             Console.WriteLine("Could not find source line for instruction pointer");
             return decompiledMethod;
         }
-        
+
         Console.WriteLine("WARN: Method not found");
         return string.Empty;
     }

@@ -1,4 +1,7 @@
-﻿using ICSharpCode.Decompiler.Metadata;
+﻿using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
+using ICSharpCode.Decompiler;
+using ICSharpCode.Decompiler.Metadata;
 
 namespace ndbgext;
 
@@ -6,13 +9,21 @@ sealed class DbgEngAssemblyResolver : IAssemblyResolver
 {
     private readonly PeFileCache _peFileCache;
     private readonly string _targetFrameworkId;
-        
+    private readonly UniversalAssemblyResolver _universalAssemblyResolver;
+
     public DbgEngAssemblyResolver(
         PeFileCache peFileCache,
-        string targetFrameworkId)
+        PEFile peFile,
+        DecompilerSettings settings,
+        string filePath)
     {
-        _targetFrameworkId = targetFrameworkId;
+        _targetFrameworkId = peFile.DetectTargetFrameworkId();
         _peFileCache = peFileCache;
+        
+        _universalAssemblyResolver = new UniversalAssemblyResolver(filePath, settings.ThrowOnAssemblyResolveErrors,
+            _targetFrameworkId, peFile.DetectRuntimePack(),
+            settings.LoadInMemory ? PEStreamOptions.PrefetchMetadata : PEStreamOptions.Default,
+            settings.ApplyWindowsRuntimeProjections ? MetadataReaderOptions.ApplyWindowsRuntimeProjections : MetadataReaderOptions.None);
     }
 
     public PEFile Resolve(IAssemblyReference reference)
@@ -31,6 +42,12 @@ sealed class DbgEngAssemblyResolver : IAssemblyResolver
         {
             return result;
         }
+        
+        var fromUniversal = _universalAssemblyResolver.Resolve(reference);
+        if (fromUniversal != null)
+        {
+            return fromUniversal;
+        }
             
         return null;
     }
@@ -42,7 +59,7 @@ sealed class DbgEngAssemblyResolver : IAssemblyResolver
         {
             return result;
         }
-            
+        
         if (_peFileCache.TryOpen(moduleName, out result))
         {
             return result;
@@ -51,6 +68,12 @@ sealed class DbgEngAssemblyResolver : IAssemblyResolver
         if (_peFileCache.TryGetFirstMatchByName(moduleName, out result))
         {
             return result;
+        }
+        
+        var fromUniversal = _universalAssemblyResolver.ResolveModule(mainModule, moduleName);
+        if (fromUniversal != null)
+        {
+            return fromUniversal;
         }
             
         return null;

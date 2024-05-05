@@ -26,7 +26,7 @@ public static unsafe class Extension
         Console.WriteLine("dumpgen [gen0|gen1|gen2]");
         Console.WriteLine("blockinginfo");
         Console.WriteLine("heapstat");
-        Console.WriteLine("decompile instructionpointer");
+        Console.WriteLine("decompile stackpointer");
         Console.WriteLine("savemodule modulename");
         return 0;
     }
