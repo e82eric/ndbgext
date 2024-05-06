@@ -12,6 +12,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Decompiler", "Decompiler\De
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClrMdHost", "ClrMdHost\ClrMdHost.csproj", "{F5776CD6-F3FD-4DB8-A858-ECB158E29ACD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FrameLocals", "FrameLocals\FrameLocals.csproj", "{43FBE94F-A143-47CA-BE43-7B131374846E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -42,5 +44,9 @@ Global
 		{F5776CD6-F3FD-4DB8-A858-ECB158E29ACD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F5776CD6-F3FD-4DB8-A858-ECB158E29ACD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F5776CD6-F3FD-4DB8-A858-ECB158E29ACD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{43FBE94F-A143-47CA-BE43-7B131374846E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{43FBE94F-A143-47CA-BE43-7B131374846E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{43FBE94F-A143-47CA-BE43-7B131374846E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{43FBE94F-A143-47CA-BE43-7B131374846E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

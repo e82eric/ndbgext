@@ -368,18 +368,42 @@ public static unsafe class Extension
         return _DecompileCurrentFrame(pUnknown, args);
     }
     
-    private static readonly DecompileProvider DecompileProvider = new(new Decompiler(new DllExtractor()));
+    private static readonly DecompileCurrentFrameProvider DecompileCurrentFrameProvider = new(new Decompiler(new DllExtractor()));
     private static int _DecompileCurrentFrame(nint pUnknown, nint args)
     {
         try
         {
-            DecompileCommand cmd = new(DecompileProvider, pUnknown);
+            DecompileCurrentFrameCommand cmd = new(DecompileCurrentFrameProvider, pUnknown);
             string? arguments = Marshal.PtrToStringAnsi(args);
             cmd.Run(arguments ?? "");
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"Failed to run {nameof(DecompileCommand)} command.");
+            Console.Error.WriteLine($"Failed to run {nameof(DecompileCurrentFrameCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "decompiletype", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int DecompileType(nint pUnknown, nint args)
+    {
+        return _DecompileType(pUnknown, args);
+    }
+    
+    private static readonly DecompileTypeProvider DecompileTypeProvider = new(new Decompiler(new DllExtractor()));
+    private static int _DecompileType(nint pUnknown, nint args)
+    {
+        try
+        {
+            DecompileTypeCommand cmd = new(DecompileTypeProvider, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(DecompileTypeCommand)} command.");
             Console.Error.WriteLine(e);
         }
 

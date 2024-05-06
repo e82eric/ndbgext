@@ -4,14 +4,14 @@ using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
 
-public class DecompileCommand : DbgEngCommand
+public class DecompileCurrentFrameCommand : DbgEngCommand
 {
-    private readonly DecompileProvider _provider;
+    private readonly DecompileCurrentFrameProvider _currentFrameProvider;
 
-    public DecompileCommand(DecompileProvider provider, nint pUnknown, bool redirectConsoleOutput = true)
+    public DecompileCurrentFrameCommand(DecompileCurrentFrameProvider currentFrameProvider, nint pUnknown, bool redirectConsoleOutput = true)
         : base(pUnknown, redirectConsoleOutput)
     {
-        _provider = provider;
+        _currentFrameProvider = currentFrameProvider;
     }
 
     internal void Run(string args)
@@ -36,7 +36,7 @@ public class DecompileCommand : DbgEngCommand
         {
             foreach (var runtime in Runtimes)
             {
-                _provider.Run(runtime, parsedStackPointer);
+                _currentFrameProvider.Run(runtime, parsedStackPointer);
             }
         }
         else
@@ -46,11 +46,11 @@ public class DecompileCommand : DbgEngCommand
     }
 }
 
-public class DecompileProvider
+public class DecompileCurrentFrameProvider
 {
     private readonly Decompiler _decompiler;
 
-    public DecompileProvider(Decompiler decompiler)
+    public DecompileCurrentFrameProvider(Decompiler decompiler)
     {
         _decompiler = decompiler;
     }
@@ -89,6 +89,9 @@ public class DecompileProvider
         if (currentFrame?.Method != null)
         {
             var clrMethod = currentFrame.Method;
+            Console.WriteLine("Method Token: {0:X}", clrMethod.MetadataToken);
+            Console.WriteLine("Type Token: {0:X}", clrMethod.Type.MetadataToken);
+            
             var ilOffsets = new List<int>();
             foreach (var ilInfo in clrMethod.ILOffsetMap)
             {
@@ -109,29 +112,37 @@ public class DecompileProvider
             var code = _decompiler.Decompile(runtime, clrMethod.Type.Module.Name, clrMethod, ilOffsets, nextFrame.Method?.Name);
             Console.WriteLine(code);
 
-            Console.WriteLine();
-            Console.WriteLine("Frame Locals: {0:X} {1:X}", currentFrame.StackPointer, previousFrame.StackPointer);
-            var locals = new List<Local>();
-            foreach (var ptr in EnumeratePointersInRange(currentFrame.StackPointer, previousFrame.StackPointer, runtime))
+            if (previousFrame != null && currentFrame != null)
             {
-                if (runtime.DataTarget.DataReader.ReadPointer(ptr, out var value))
+                Console.WriteLine();
+                Console.WriteLine("Frame data: {0:X} {1:X}", currentFrame.StackPointer, previousFrame.StackPointer);
+                var locals = new List<Local>();
+                foreach (var ptr in EnumeratePointersInRange(currentFrame.StackPointer, previousFrame.StackPointer,
+                             runtime))
                 {
-                    var objectType = runtime.Heap.GetObjectType(value);
-                    if (objectType != null)
+                    if (runtime.DataTarget.DataReader.ReadPointer(ptr, out var value))
                     {
-                        var local = new Local
+                        var objectType = runtime.Heap.GetObjectType(value);
+                        if (objectType != null)
                         {
-                            Address = value, MethodTable = objectType.MethodTable, Type = objectType.Name
-                        };
-                        locals.Add(local);
+                            var local = new Local
+                            {
+                                Address = value, MethodTable = objectType.MethodTable, Type = objectType.Name
+                            };
+                            locals.Add(local);
+                        }
+                        else
+                        {
+                            locals.Add(new Local { Address = value });
+                        }
                     }
                 }
-            }
 
-            var distinctLocals = locals.Distinct(new LocalComparer());
-            foreach (var local in distinctLocals)
-            {
-                Console.WriteLine("{0:X} {1:X} {2}", local.MethodTable, local.Address, local.Type);
+                var distinctLocals = locals.Distinct(new LocalComparer());
+                foreach (var local in distinctLocals)
+                {
+                    Console.WriteLine("{0:X} {1:X} {2}", local.MethodTable, local.Address, local.Type);
+                }
             }
         }
         else
@@ -164,8 +175,8 @@ public class DecompileProvider
         public ulong Address;
         public string Type;
     }
-    
-    class LocalComparer : IEqualityComparer<Local>
+
+    private class LocalComparer : IEqualityComparer<Local>
     {
         public bool Equals(Local x, Local y)
         {

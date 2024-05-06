@@ -14,38 +14,22 @@ namespace ndbgext;
 public class Decompiler
 {
     private readonly DllExtractor _dllExtractor;
+    private readonly DecompilerSettings _settings;
 
     public Decompiler(DllExtractor dllExtractor)
     {
-        _dllExtractor = dllExtractor;
-    }
-    public string Decompile(ClrRuntime runtime, string filePath, ClrMethod method, IList<int> ilOffsets, string nextMethodName)
-    {
-        PEFile peFile;
-        using (var memoryStream = new MemoryStream())
-        {
-            _dllExtractor.Extract(runtime.DataTarget.DataReader, method.Type.Module.ImageBase, memoryStream);
-
-            memoryStream.Seek(0, SeekOrigin.Begin);
-            peFile = new PEFile(
-                filePath,
-                memoryStream,
-                streamOptions: PEStreamOptions.PrefetchEntireImage,
-                metadataOptions: new DecompilerSettings().ApplyWindowsRuntimeProjections
-                    ? MetadataReaderOptions.ApplyWindowsRuntimeProjections
-                    : MetadataReaderOptions.None);
-        }
-
-        var settings = new DecompilerSettings
+        _settings = new DecompilerSettings
         {
             LoadInMemory = true,
             ThrowOnAssemblyResolveErrors = false
         };
-        
-        var resolver = new DbgEngAssemblyResolver(new PeFileCache(_dllExtractor, runtime),
-             peFile, settings, method.Type.Module.Name);
-        var typeSystem = new DecompilerTypeSystem(peFile, resolver);
-        var decompiler = new CSharpDecompiler(typeSystem, settings);
+        _dllExtractor = dllExtractor;
+    }
+    public string Decompile(ClrRuntime runtime, string filePath, ClrMethod method, IList<int> ilOffsets, string nextMethodName)
+    {
+        PEFile peFile = GetPeFile(runtime, filePath, method.Type);
+
+        var decompiler = GetDecompiler(runtime, method.Type.Module, peFile, _settings);
         var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.GetAllTypeDefinitions()
             .FirstOrDefault(t => t.MetadataToken.GetHashCode() == method.Type.MetadataToken);
         
@@ -55,10 +39,10 @@ public class Decompiler
             var stringWriter = new StringWriter();
             var tokenWriter = TokenWriter.CreateWriterThatSetsLocationsInAST(stringWriter, "  ");
             var syntaxTree = decompiler.Decompile(ilSpyMethod.MetadataToken);
-            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(tokenWriter, settings.CSharpFormattingOptions));
+            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(tokenWriter, _settings.CSharpFormattingOptions));
             var sequencePoints = decompiler.CreateSequencePoints(syntaxTree);
             var sw = new StringWriter();
-            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(sw, settings.CSharpFormattingOptions));
+            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(sw, _settings.CSharpFormattingOptions));
             var decompiledMethod = sw.ToString();
             var split = decompiledMethod.Split('\n');
 
@@ -107,6 +91,47 @@ public class Decompiler
 
         Console.WriteLine("WARN: Method not found");
         return string.Empty;
+    }
+
+    private CSharpDecompiler GetDecompiler(ClrRuntime runtime, ClrModule module, PEFile peFile, DecompilerSettings settings)
+    {
+        var resolver = new DbgEngAssemblyResolver(new PeFileCache(_dllExtractor, runtime),
+            peFile, settings, module.Name);
+        var typeSystem = new DecompilerTypeSystem(peFile, resolver);
+        var decompiler = new CSharpDecompiler(typeSystem, settings);
+        return decompiler;
+    }
+
+    public string DecompileType(ClrRuntime runtime, string filePath, ClrType type)
+    {
+        var peFile = GetPeFile(runtime, filePath, type);
+
+        var decompiler = GetDecompiler(runtime, type.Module, peFile, _settings);
+        var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.GetAllTypeDefinitions()
+            .FirstOrDefault(t => t.MetadataToken.GetHashCode() == type.MetadataToken);
+
+        var code = decompiler.DecompileType(typeDefinition.FullTypeName);
+        return code.ToString();
+    }
+
+    private PEFile GetPeFile(ClrRuntime runtime, string filePath, ClrType type)
+    {
+        PEFile peFile;
+        using (var memoryStream = new MemoryStream())
+        {
+            _dllExtractor.Extract(runtime.DataTarget.DataReader, type.Module.ImageBase, memoryStream);
+
+            memoryStream.Seek(0, SeekOrigin.Begin);
+            peFile = new PEFile(
+                filePath,
+                memoryStream,
+                streamOptions: PEStreamOptions.PrefetchEntireImage,
+                metadataOptions: new DecompilerSettings().ApplyWindowsRuntimeProjections
+                    ? MetadataReaderOptions.ApplyWindowsRuntimeProjections
+                    : MetadataReaderOptions.None);
+        }
+
+        return peFile;
     }
 
     private static SequencePoint? FindSeqPointByOffset(int ilOffset, KeyValuePair<ILFunction, List<SequencePoint>> first)
