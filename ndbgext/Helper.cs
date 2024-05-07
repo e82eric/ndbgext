@@ -1,4 +1,5 @@
-﻿using Microsoft.Diagnostics.Runtime;
+﻿using System.Globalization;
+using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
 
@@ -144,5 +145,21 @@ public static class Helper
         }
 
         Console.WriteLine("Total Objects: {0:N0}, Total Size: {1}", items.Count, Helper.FormatBytes(items.Sum(i => (float)i.Size)));
+    }
+
+    public static bool TryParseAddress(string value, out ulong result)
+    {
+        result = default;
+        if (value.StartsWith("0x"))
+        {
+            // remove "0x" for parsing
+            value = value.Substring(2).TrimStart('0');
+        }
+
+        // remove the leading 0000 that WinDBG often add in 64 bit
+        value = value.TrimStart('0');
+
+        return ulong.TryParse(value, NumberStyles.HexNumber,
+            CultureInfo.InvariantCulture, out result);
     }
 }

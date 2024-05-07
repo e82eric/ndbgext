@@ -3,6 +3,7 @@ using System.Reflection.PortableExecutable;
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.CSharp.OutputVisitor;
+using ICSharpCode.Decompiler.CSharp.Syntax;
 using ICSharpCode.Decompiler.IL;
 using ICSharpCode.Decompiler.Metadata;
 using ICSharpCode.Decompiler.TypeSystem;
@@ -25,20 +26,12 @@ public class Decompiler
         };
         _dllExtractor = dllExtractor;
     }
-    public string Decompile(ClrRuntime runtime, string filePath, ClrMethod method, IList<int> ilOffsets, string nextMethodName)
+    public string DecompileMethodWithCurrentLineIndicator(ClrRuntime runtime, ClrMethod method, IList<int> ilOffsets, string nextMethodName)
     {
-        PEFile peFile = GetPeFile(runtime, filePath, method.Type);
-
-        var decompiler = GetDecompiler(runtime, method.Type.Module, peFile, _settings);
-        var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.GetAllTypeDefinitions()
-            .FirstOrDefault(t => t.MetadataToken.GetHashCode() == method.Type.MetadataToken);
-        
-        var ilSpyMethod = typeDefinition?.Methods.FirstOrDefault(m => m.MetadataToken.GetHashCode() == method.MetadataToken);
-        if (ilSpyMethod != null)
+        if (TryDecompileMethod(runtime, method, out var syntaxTree, out var decompiler))
         {
             var stringWriter = new StringWriter();
             var tokenWriter = TokenWriter.CreateWriterThatSetsLocationsInAST(stringWriter, "  ");
-            var syntaxTree = decompiler.Decompile(ilSpyMethod.MetadataToken);
             syntaxTree.AcceptVisitor(new CSharpOutputVisitor(tokenWriter, _settings.CSharpFormattingOptions));
             var sequencePoints = decompiler.CreateSequencePoints(syntaxTree);
             var sw = new StringWriter();
@@ -92,6 +85,40 @@ public class Decompiler
         Console.WriteLine("WARN: Method not found");
         return string.Empty;
     }
+    
+    public string DecompileMethod(ClrRuntime runtime, ClrMethod method)
+    {
+        if (TryDecompileMethod(runtime, method, out var syntaxTree, out _))
+        {
+            return syntaxTree.ToString();
+        }
+        Console.WriteLine("WARN: Method not found");
+        return string.Empty;
+    }
+    
+    private bool TryDecompileMethod(ClrRuntime runtime, ClrMethod method, out SyntaxTree syntaxTree, out CSharpDecompiler decompiler)
+    {
+        syntaxTree = null;
+        decompiler = null;
+        PEFile peFile = GetPeFile(runtime, method.Type.Module.Name, method.Type);
+
+        decompiler = GetDecompiler(runtime, method.Type.Module, peFile, _settings);
+        var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.GetAllTypeDefinitions()
+            .FirstOrDefault(t => t.MetadataToken.GetHashCode() == method.Type.MetadataToken);
+        
+        var ilSpyMethod = typeDefinition?.Methods.FirstOrDefault(m => m.MetadataToken.GetHashCode() == method.MetadataToken);
+        if (ilSpyMethod != null)
+        {
+            var stringWriter = new StringWriter();
+            var tokenWriter = TokenWriter.CreateWriterThatSetsLocationsInAST(stringWriter, "  ");
+            syntaxTree = decompiler.Decompile(ilSpyMethod.MetadataToken);
+            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(tokenWriter, _settings.CSharpFormattingOptions));
+            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(stringWriter, _settings.CSharpFormattingOptions));
+            return true;
+        }
+
+        return false;
+    }
 
     private CSharpDecompiler GetDecompiler(ClrRuntime runtime, ClrModule module, PEFile peFile, DecompilerSettings settings)
     {
@@ -105,7 +132,6 @@ public class Decompiler
     public string DecompileType(ClrRuntime runtime, string filePath, ClrType type)
     {
         var peFile = GetPeFile(runtime, filePath, type);
-
         var decompiler = GetDecompiler(runtime, type.Module, peFile, _settings);
         var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.GetAllTypeDefinitions()
             .FirstOrDefault(t => t.MetadataToken.GetHashCode() == type.MetadataToken);

@@ -17,22 +17,28 @@ public class DecompileCurrentFrameCommand : DbgEngCommand
     internal void Run(string args)
     {
         var arguments = args.Split(' ');
+        if (arguments.Length == 2 && arguments[0] == "-ip")
+        {
+            if(Helper.TryParseAddress(arguments[1], out var parsedInstructionPointer))
+            {
+                foreach (var runtime in Runtimes)
+                {
+                    _currentFrameProvider.DecompileMethod(runtime, parsedInstructionPointer);
+                }
+            }
+            else
+            {
+                Console.WriteLine("Could not parse {0} as address", arguments[1]);
+            }
+
+            return;
+        }
         if (arguments.Length != 1)
         {
             Console.WriteLine("missing instruction pointer address");
         }
-        var stackPointer = arguments[0];
-        if (stackPointer.StartsWith("0x"))
-        {
-            // remove "0x" for parsing
-            stackPointer = stackPointer.Substring(2).TrimStart('0');
-        }
-
-        // remove the leading 0000 that WinDBG often add in 64 bit
-        stackPointer = stackPointer.TrimStart('0');
-
-        if (ulong.TryParse(stackPointer, NumberStyles.HexNumber,
-                CultureInfo.InvariantCulture, out var parsedStackPointer))
+        
+        if(Helper.TryParseAddress(arguments[0], out var parsedStackPointer))
         {
             foreach (var runtime in Runtimes)
             {
@@ -41,7 +47,7 @@ public class DecompileCurrentFrameCommand : DbgEngCommand
         }
         else
         {
-            Console.WriteLine("Could not parse {0} as address", stackPointer);
+            Console.WriteLine("Could not parse {0} as address", arguments[0]);
         }
     }
 }
@@ -109,7 +115,7 @@ public class DecompileCurrentFrameProvider
             PrintFrame(currentFrame, true);
             PrintFrame(previousFrame, false);
             Console.WriteLine();
-            var code = _decompiler.Decompile(runtime, clrMethod.Type.Module.Name, clrMethod, ilOffsets, nextFrame.Method?.Name);
+            var code = _decompiler.DecompileMethodWithCurrentLineIndicator(runtime, clrMethod, ilOffsets, nextFrame.Method?.Name);
             Console.WriteLine(code);
 
             if (previousFrame != null && currentFrame != null)
@@ -148,6 +154,16 @@ public class DecompileCurrentFrameProvider
         else
         {
             Console.WriteLine("Could not file method frame/method for {0:X}", stackPointer);
+        }
+    }
+
+    public void DecompileMethod(ClrRuntime runtime, ulong instructionPointer)
+    {
+        var method = runtime.GetMethodByInstructionPointer(instructionPointer);
+        if (method != null)
+        {
+            var code = _decompiler.DecompileMethod(runtime, method);
+            Console.WriteLine(code);
         }
     }
 
