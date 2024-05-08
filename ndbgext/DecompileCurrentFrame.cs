@@ -1,66 +1,79 @@
-﻿using System.Globalization;
-using DbgEngExtension;
+﻿using DbgEngExtension;
 using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
 
-public class DecompileCurrentFrameCommand : DbgEngCommand
+public class DecompileMethodCommand : DbgEngCommand
 {
-    private readonly DecompileCurrentFrameProvider _currentFrameProvider;
+    private readonly DecompileMethodProvider _methodProvider;
 
-    public DecompileCurrentFrameCommand(DecompileCurrentFrameProvider currentFrameProvider, nint pUnknown, bool redirectConsoleOutput = true)
+    public DecompileMethodCommand(DecompileMethodProvider methodProvider, nint pUnknown, bool redirectConsoleOutput = true)
         : base(pUnknown, redirectConsoleOutput)
     {
-        _currentFrameProvider = currentFrameProvider;
+        _methodProvider = methodProvider;
     }
 
     internal void Run(string args)
     {
         var arguments = args.Split(' ');
-        if (arguments.Length == 2 && arguments[0] == "-ip")
+        if (arguments.Length == 2)
         {
-            if(Helper.TryParseAddress(arguments[1], out var parsedInstructionPointer))
+            var actionStr = arguments[0];
+            switch (actionStr)
             {
-                foreach (var runtime in Runtimes)
-                {
-                    _currentFrameProvider.DecompileMethod(runtime, parsedInstructionPointer);
-                }
+                case "-ip":
+                    if(Helper.TryParseAddress(arguments[1], out var parsedInstructionPointer))
+                    {
+                        foreach (var runtime in Runtimes)
+                        {
+                            _methodProvider.RunForInstructionPointer(runtime, parsedInstructionPointer);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Could not parse {0} as address", arguments[1]);
+                    }
+                    break;
+                case "-sp":
+                    if(Helper.TryParseAddress(arguments[1], out var parsedStackPointer))
+                    {
+                        foreach (var runtime in Runtimes)
+                        {
+                            _methodProvider.RunForStackPointer(runtime, parsedStackPointer);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Could not parse {0} as address", arguments[1]);
+                    }
+                    break;
+                case "-md":
+                    if(Helper.TryParseAddress(arguments[1], out var parsedMethodDesc))
+                    {
+                        foreach (var runtime in Runtimes)
+                        {
+                            _methodProvider.RunForMethodDesc(runtime, parsedMethodDesc);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Could not parse {0} as address", arguments[1]);
+                    }
+                    break;
             }
-            else
-            {
-                Console.WriteLine("Could not parse {0} as address", arguments[1]);
-            }
-
-            return;
-        }
-        if (arguments.Length != 1)
-        {
-            Console.WriteLine("missing instruction pointer address");
-        }
-        
-        if(Helper.TryParseAddress(arguments[0], out var parsedStackPointer))
-        {
-            foreach (var runtime in Runtimes)
-            {
-                _currentFrameProvider.Run(runtime, parsedStackPointer);
-            }
-        }
-        else
-        {
-            Console.WriteLine("Could not parse {0} as address", arguments[0]);
         }
     }
 }
 
-public class DecompileCurrentFrameProvider
+public class DecompileMethodProvider
 {
     private readonly Decompiler _decompiler;
 
-    public DecompileCurrentFrameProvider(Decompiler decompiler)
+    public DecompileMethodProvider(Decompiler decompiler)
     {
         _decompiler = decompiler;
     }
-    public void Run(ClrRuntime runtime, ulong stackPointer)
+    public void RunForStackPointer(ClrRuntime runtime, ulong stackPointer)
     {
         ClrStackFrame? nextFrame = null;
         ClrStackFrame? currentFrame = null;
@@ -157,9 +170,19 @@ public class DecompileCurrentFrameProvider
         }
     }
 
-    public void DecompileMethod(ClrRuntime runtime, ulong instructionPointer)
+    public void RunForInstructionPointer(ClrRuntime runtime, ulong instructionPointer)
     {
         var method = runtime.GetMethodByInstructionPointer(instructionPointer);
+        if (method != null)
+        {
+            var code = _decompiler.DecompileMethod(runtime, method);
+            Console.WriteLine(code);
+        }
+    }
+    
+    public void RunForMethodDesc(ClrRuntime runtime, ulong methodDesc)
+    {
+        var method = runtime.GetMethodByHandle(methodDesc);
         if (method != null)
         {
             var code = _decompiler.DecompileMethod(runtime, method);

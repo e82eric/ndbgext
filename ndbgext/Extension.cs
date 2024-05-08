@@ -368,18 +368,18 @@ public static unsafe class Extension
         return _DecompileCurrentFrame(pUnknown, args);
     }
     
-    private static readonly DecompileCurrentFrameProvider DecompileCurrentFrameProvider = new(new Decompiler(new DllExtractor()));
+    private static readonly DecompileMethodProvider DecompileMethodProvider = new(new Decompiler(new DllExtractor()));
     private static int _DecompileCurrentFrame(nint pUnknown, nint args)
     {
         try
         {
-            DecompileCurrentFrameCommand cmd = new(DecompileCurrentFrameProvider, pUnknown);
+            DecompileMethodCommand cmd = new(DecompileMethodProvider, pUnknown);
             string? arguments = Marshal.PtrToStringAnsi(args);
             cmd.Run(arguments ?? "");
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"Failed to run {nameof(DecompileCurrentFrameCommand)} command.");
+            Console.Error.WriteLine($"Failed to run {nameof(DecompileMethodCommand)} command.");
             Console.Error.WriteLine(e);
         }
 

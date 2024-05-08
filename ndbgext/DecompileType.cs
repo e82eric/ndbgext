@@ -1,5 +1,4 @@
-﻿using System.Globalization;
-using DbgEngExtension;
+﻿using DbgEngExtension;
 using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
@@ -20,95 +19,68 @@ public class DecompileTypeCommand : DbgEngCommand
         switch (arguments.Length)
         {
             case 1:
-                var stackPointer = arguments[0];
-                if (stackPointer.StartsWith("0x"))
-                {
-                    // remove "0x" for parsing
-                    stackPointer = stackPointer.Substring(2).TrimStart('0');
-                }
-
-                // remove the leading 0000 that WinDBG often add in 64 bit
-                stackPointer = stackPointer.TrimStart('0');
-
-                if (ulong.TryParse(stackPointer, NumberStyles.HexNumber,
-                        CultureInfo.InvariantCulture, out var parsedStackPointer))
+            {
+                var objAddress = arguments[0];
+                if (Helper.TryParseAddress(arguments[0], out var parsedObjAddress))
                 {
                     foreach (var runtime in Runtimes)
                     {
-                        _provider.Run(runtime, parsedStackPointer);
+                        _provider.Run(runtime, parsedObjAddress);
                     }
                 }
                 else
                 {
-                    Console.WriteLine("Could not parse {0} as address", stackPointer);
+                    Console.WriteLine("Could not parse {0} as address", objAddress);
                 }
 
                 break;
+            }
             case 2:
-                if (arguments[0] == "-nm")
+                switch (arguments[0])
                 {
-                    var name = arguments[1];
-                    foreach (var runtime in Runtimes)
-                    {
-                        _provider.RunByName(runtime, name);
-                    }
+                    case "-ad":
+                        var objAddress = arguments[1];
+                        if(Helper.TryParseAddress(arguments[1], out var parsedObjAddress))
+                        {
+                            foreach (var runtime in Runtimes)
+                            {
+                                _provider.Run(runtime, parsedObjAddress);
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Could not parse {0} as address", objAddress);
+                        }
 
-                    break;
-                }
-                var metadataToken = arguments[1];
-                if (metadataToken.StartsWith("0x"))
-                {
-                    // remove "0x" for parsing
-                    metadataToken = metadataToken.Substring(2).TrimStart('0');
-                }
+                        break;
+                    case "-nm":
+                        var name = arguments[1];
+                        foreach (var runtime in Runtimes)
+                        {
+                            _provider.RunByName(runtime, name);
+                        }
 
-                // remove the leading 0000 that WinDBG often add in 64 bit
-                metadataToken = metadataToken.TrimStart('0');
-
-                if (int.TryParse(metadataToken, NumberStyles.HexNumber,
-                        CultureInfo.InvariantCulture, out var parsedmetadataToken))
-                {
-                    foreach (var runtime in Runtimes)
-                    {
-                        _provider.RunForMetadataToken(runtime, parsedmetadataToken);
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("Could not parse {0} as address", metadataToken);
+                        break;
+                    case "-md":
+                        var md = arguments[1];
+                        if(Helper.TryParseToken(arguments[1], out var parsedMd))
+                        {
+                            foreach (var runtime in Runtimes)
+                            {
+                                _provider.RunForMetadataToken(runtime, parsedMd);
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Could not parse {0} as address", parsedMd);
+                        }
+                        break;
                 }
                 break;
             default:
                 Console.WriteLine("Usage decompiletype stackpointer|decompiletype -md metadataToken");
                 break;
         }
-        
-        //if (arguments.Length == 1)
-        //{
-        //    Console.WriteLine("missing instruction pointer address");
-        //}
-        //var stackPointer = arguments[0];
-        //if (stackPointer.StartsWith("0x"))
-        //{
-        //    // remove "0x" for parsing
-        //    stackPointer = stackPointer.Substring(2).TrimStart('0');
-        //}
-
-        //// remove the leading 0000 that WinDBG often add in 64 bit
-        //stackPointer = stackPointer.TrimStart('0');
-
-        //if (ulong.TryParse(stackPointer, NumberStyles.HexNumber,
-        //        CultureInfo.InvariantCulture, out var parsedStackPointer))
-        //{
-        //    foreach (var runtime in Runtimes)
-        //    {
-        //        _provider.Run(runtime, parsedStackPointer);
-        //    }
-        //}
-        //else
-        //{
-        //    Console.WriteLine("Could not parse {0} as address", stackPointer);
-        //}
     }
 }
 

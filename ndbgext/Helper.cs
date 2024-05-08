@@ -162,4 +162,20 @@ public static class Helper
         return ulong.TryParse(value, NumberStyles.HexNumber,
             CultureInfo.InvariantCulture, out result);
     }
+    
+    public static bool TryParseToken(string value, out int result)
+    {
+        result = default;
+        if (value.StartsWith("0x"))
+        {
+            // remove "0x" for parsing
+            value = value.Substring(2).TrimStart('0');
+        }
+
+        // remove the leading 0000 that WinDBG often add in 64 bit
+        value = value.TrimStart('0');
+
+        return int.TryParse(value, NumberStyles.HexNumber,
+            CultureInfo.InvariantCulture, out result);
+    }
 }
