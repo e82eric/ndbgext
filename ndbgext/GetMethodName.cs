@@ -28,28 +28,17 @@ public class GetMethodNameCommand : DbgEngCommand
         var arguments = args.Split(' ');
 
         var address = arguments[0];
-        if (address.StartsWith("0x"))
+        if (Helper.TryParseAddress(arguments[0], out var reference))
         {
-            // remove "0x" for parsing
-            address = address.Substring(2).TrimStart('0');
+            foreach (var runtime in Runtimes)
+            {
+                var method = _getMethodName.Get(runtime, reference);
+                Console.WriteLine("TypeName: {0}", method.Type.Name);
+                Console.WriteLine("MethodName: {0}", method.Name);
+            }
         }
-
-        // remove the leading 0000 that WinDBG often add in 64 bit
-        address = address.TrimStart('0');
-
-        if (!ulong.TryParse(address, System.Globalization.NumberStyles.HexNumber,
-                System.Globalization.CultureInfo.InvariantCulture, out var reference))
-        {
-            Console.WriteLine("numeric address value expected");
-            return;
-        }
-
-        foreach (var runtime in Runtimes)
-        {
-            var method = _getMethodName.Get(runtime, reference);
-            Console.WriteLine("TypeName: {0}", method.Type.Name);
-            Console.WriteLine("MethodName: {0}", method.Name);
-        }
+        
+        Console.WriteLine("usage: [address]");
     }
 }
 

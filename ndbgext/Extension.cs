@@ -19,15 +19,16 @@ public static unsafe class Extension
         Console.WriteLine("clruniqstack");
         Console.WriteLine("threadpoolqueue (tpq) -detail");
         Console.WriteLine("threadpoolstats (tps)");
-        Console.WriteLine("dumpconcurrentdict (dcd)");
-        Console.WriteLine("dumpconcurrentqueue (dcq)");
+        Console.WriteLine("dumpconcurrentdict (dcd) -list [containsFilter]");
+        Console.WriteLine("dumpconcurrentqueue (dcq) -list [containsFilter]");
         Console.WriteLine("getmetodname (gmn) [methodptr]");
-        Console.WriteLine("tasks (tks) -detail");
+        Console.WriteLine("tasks (tks) -detail [state]");
         Console.WriteLine("dumpgen [gen0|gen1|gen2]");
         Console.WriteLine("blockinginfo");
         Console.WriteLine("heapstat");
-        Console.WriteLine("decompile stackpointer");
-        Console.WriteLine("savemodule modulename");
+        Console.WriteLine("decompilemethod -sp [address] | -ip [instructionPointer] | -md [methodDesc]");
+        Console.WriteLine("decompiletype -ad [address] | -nm [fullTypeName]");
+        Console.WriteLine("savemodule [modulename]");
         return 0;
     }
 
@@ -362,7 +363,7 @@ public static unsafe class Extension
         return 0;
     }
     
-    [UnmanagedCallersOnly(EntryPoint = "decompile", CallConvs = new[] { typeof(CallConvStdcall) })]
+    [UnmanagedCallersOnly(EntryPoint = "decompilemethod", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int Decompile(nint pUnknown, nint args)
     {
         return _DecompileCurrentFrame(pUnknown, args);

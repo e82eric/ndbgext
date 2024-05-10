@@ -16,49 +16,39 @@ public class FindRefCommand : DbgEngCommand
     internal void Run(string args)
     {
         var arguments = args.Split(' ');
-
-        var address = arguments[0];
-        if (address.StartsWith("0x"))
+        if (arguments.Length == 1)
         {
-            // remove "0x" for parsing
-            address = address.Substring(2).TrimStart('0');
-        }
-
-        // remove the leading 0000 that WinDBG often add in 64 bit
-        address = address.TrimStart('0');
-
-        if (!ulong.TryParse(address, System.Globalization.NumberStyles.HexNumber,
-                System.Globalization.CultureInfo.InvariantCulture, out var reference))
-        {
-            Console.WriteLine("numeric address value expected");
-            return;
-        }
-        
-        foreach (var runtime in Runtimes)
-        {
-            var items = _provider.Find(runtime, reference);
-            foreach (var item in items)
+            if (Helper.TryParseAddress(arguments[0], out var reference))
             {
-                if (item.IsArray)
+                foreach (var runtime in Runtimes)
                 {
-                    Console.WriteLine("Found in array");
-                    Console.WriteLine("Array Address: {0:X}", item.Address);
-                    Console.WriteLine("Array Type: {0}", item.TypeName);
-                    Console.WriteLine("Array Index: {0}", item.ArrayIndex);
-                    Console.WriteLine("Array Item Index: {0:X}", item.ArrayItemAddress);
-                    Console.WriteLine();
-                }
-                else
-                {
-                    Console.WriteLine("Found on object");
-                    Console.WriteLine("Object Address: {0:X}", item.Address);
-                    Console.WriteLine("Object Type: {0}", item.TypeName);
-                    Console.WriteLine("Object Field Name: {0}", item.FieldName);
-                    Console.WriteLine("Object Field Address: {0:X}", item.FieldAddress);
-                    Console.WriteLine();
+                    var items = _provider.Find(runtime, reference);
+                    foreach (var item in items)
+                    {
+                        if (item.IsArray)
+                        {
+                            Console.WriteLine("Found in array");
+                            Console.WriteLine("Array Address: {0:X}", item.Address);
+                            Console.WriteLine("Array Type: {0}", item.TypeName);
+                            Console.WriteLine("Array Index: {0}", item.ArrayIndex);
+                            Console.WriteLine("Array Item Index: {0:X}", item.ArrayItemAddress);
+                            Console.WriteLine();
+                        }
+                        else
+                        {
+                            Console.WriteLine("Found on object");
+                            Console.WriteLine("Object Address: {0:X}", item.Address);
+                            Console.WriteLine("Object Type: {0}", item.TypeName);
+                            Console.WriteLine("Object Field Name: {0}", item.FieldName);
+                            Console.WriteLine("Object Field Address: {0:X}", item.FieldAddress);
+                            Console.WriteLine();
+                        }
+                    }
                 }
             }
         }
+        
+        Console.WriteLine("usage: [address]");
     }
 }
 

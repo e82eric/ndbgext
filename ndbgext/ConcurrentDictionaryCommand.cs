@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using DbgEngExtension;
+using ICSharpCode.Decompiler.CSharp.Syntax;
 using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
@@ -41,11 +42,6 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
     {
     }
 
-    public ConcurrentDictionaryCommand(IDisposable dbgeng, bool redirectConsoleOutput = false)
-        : base(dbgeng, redirectConsoleOutput)
-    {
-    }
-
     internal void Run(string args)
     {
         if (string.IsNullOrEmpty(args))
@@ -56,32 +52,27 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
 
         var arguments = args.Split(' ');
 
-        if (arguments[0] == "-list")
+        if(arguments.Length >= 1)
         {
-            List();
-            return;
-        }
+            if (arguments[0] == "-list")
+            {
+                var contains = arguments.Length == 2 ? arguments[1] : string.Empty;
+                List(contains);
+                return;
+            }
 
-        var address = arguments[0];
-        if (address.StartsWith("0x"))
-        {
-            // remove "0x" for parsing
-            address = address.Substring(2).TrimStart('0');
+            var address = arguments[0];
+            if (Helper.TryParseAddress(address, out var parsedAddress))
+            {
+                Show(parsedAddress);
+                return;
+            }
         }
-
-        // remove the leading 0000 that WinDBG often add in 64 bit
-        address = address.TrimStart('0');
-
-        if (!ulong.TryParse(address, System.Globalization.NumberStyles.HexNumber,
-                System.Globalization.CultureInfo.InvariantCulture, out var reference))
-        {
-            Console.WriteLine("numeric address value expected");
-            return;
-        }
-        Show(reference);
+        
+        Console.WriteLine("usage: [address] or -list");
     }
 
-    private void List()
+    private void List(string contains)
     {
         var pattern = @"^System\.Collections\.Concurrent\.ConcurrentDictionary<.*>$";
         var regex = new Regex(pattern);
@@ -105,11 +96,14 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
 
                     if (regex.IsMatch(type.Name))
                     {
-                        var isNetCore = IsNetkcore(runtime);
-                        var dictionary = heap.GetObject(obj);
-                        var entries = GetEntries(dictionary, isNetCore);
+                        if (string.IsNullOrEmpty(contains) || type.Name.Contains(contains, StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            var isNetCore = IsNetkcore(runtime);
+                            var dictionary = heap.GetObject(obj);
+                            var entries = GetEntries(dictionary, isNetCore);
 
-                        Console.WriteLine("{0:X} {1} Length: {2}", obj, type.Name, entries.Count);
+                            Console.WriteLine("{0:X} {1} Length: {2}", obj, type.Name, entries.Count);
+                        }
                     }
                 }
             }

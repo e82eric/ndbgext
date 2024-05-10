@@ -17,17 +17,18 @@ public class TasksCommand : DbgEngCommand
     {
         var argsSplit = args.Split(' ');
         var includeTaskDetails = argsSplit.Length > 0 && argsSplit[0].ToLower() == "-detail";
+        var stateFilter = includeTaskDetails && argsSplit.Length > 1 ? argsSplit[1] : string.Empty;
 
         foreach (var runtime in this.Runtimes)
         {
-            _tasks.Run(runtime, includeTaskDetails);
+            _tasks.Run(runtime, includeTaskDetails, stateFilter);
         }
     }
 }
 
 public class Tasks
 {
-    public void Run(ClrRuntime runtime, bool details)
+    public void Run(ClrRuntime runtime, bool details, string stateFilter)
     {
         var heap = runtime.Heap;
 
@@ -79,7 +80,10 @@ public class Tasks
             Console.WriteLine("---------Details--------");
             foreach (var item in result)
             {
-                Console.WriteLine("{0:X}|{1}|{2}", item.Address, item.TaskState, item.Method);
+                if (string.IsNullOrEmpty(stateFilter) || item.TaskState == stateFilter)
+                {
+                    Console.WriteLine("{0:X} {1} {2}", item.Address, item.TaskState, item.Method);
+                }
             }
         }
     }

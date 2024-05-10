@@ -17,7 +17,7 @@ public class GcGenerationInfoCommand : DbgEngCommand
     {
         var split = args.Split(' ');
         var genNumber = 0;
-        if (split.Length > 0)
+        if (split.Length == 1)
         {
             switch (split[0].ToLower())
             {
@@ -34,20 +34,18 @@ public class GcGenerationInfoCommand : DbgEngCommand
                     Console.WriteLine("Unknown generation: {0}", split[0].ToLower());
                     return;
             }
+            foreach (var runtime in Runtimes)
+            {
+                Console.WriteLine("Server Mode: {0}", runtime.Heap.IsServer);
+                Console.WriteLine("Number of heaps: {0}", runtime.Heap.LogicalHeapCount);
+            
+                var generationItems = _provider.GetGenerationItems(runtime, genNumber);
+                Helper.PrintHeapItems(generationItems);
+            }
         }
         else
         {
-            Console.WriteLine("Specify a generation: (gen0|gen1|gen2)");
-            return;
-        }
-
-        foreach (var runtime in Runtimes)
-        {
-            Console.WriteLine("Server Mode: {0}", runtime.Heap.IsServer);
-            Console.WriteLine("Number of heaps: {0}", runtime.Heap.LogicalHeapCount);
-            
-            var generationItems = _provider.GetGenerationItems(runtime, genNumber);
-            Helper.PrintHeapItems(generationItems);
+            Console.WriteLine("usage: (gen0|gen1|gen2)");
         }
     }
 }

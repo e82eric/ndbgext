@@ -38,26 +38,15 @@ public static class Helper
     {
         ClrObject callback;
         var result = string.Empty;
-        if (itemObj.Type.Name == "System.Threading.Tasks.Task")
-        {
-            callback = itemObj.ReadObjectField("m_action");
-            //result.Type = ThreadRoot.Task;
-        }
-        else
+        if (!itemObj.TryReadObjectField("m_action", out callback))
         {
             if (!itemObj.TryReadObjectField("_callback", out callback))
             {
-                itemObj.TryReadObjectField("callback", out callback);
-            }
-
-            if (!callback.IsNull)
-            {
-                //result.Type = ThreadRoot.WorkItem;
-            }
-            else
-            {
-                result = "[no callback]";
-                return result;
+                if(!itemObj.TryReadObjectField("callback", out callback))
+                {
+                    result = "[no callback]";
+                    return result;
+                }
             }
         }
 

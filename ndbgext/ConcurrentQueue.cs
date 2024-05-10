@@ -7,15 +7,10 @@ namespace ndbgext;
 
 public class ConcurrentQueueCommand : DbgEngCommand
 {
-    private readonly ConcurrentQueue _queue = new ConcurrentQueue();
+    private readonly ConcurrentQueue _queue = new();
 
     public ConcurrentQueueCommand(nint pUnknown, bool redirectConsoleOutput = true)
         : base(pUnknown, redirectConsoleOutput)
-    {
-    }
-
-    public ConcurrentQueueCommand(IDisposable dbgeng, bool redirectConsoleOutput = false)
-        : base(dbgeng, redirectConsoleOutput)
     {
     }
 
@@ -28,42 +23,34 @@ public class ConcurrentQueueCommand : DbgEngCommand
         }
 
         var arguments = args.Split(' ');
-        if (arguments[0] == "-list")
+        if (arguments.Length >= 1)
         {
-            foreach (var runtime in Runtimes)
+            if (arguments[0] == "-list")
             {
-                _queue.List(runtime);
+                var contains = arguments.Length > 1 ? arguments[1] : string.Empty;
+                foreach (var runtime in Runtimes)
+                {
+                    _queue.List(runtime, contains);
+                }
+                return;
             }
-            return;
-        }
 
-        var address = arguments[0];
-        if (address.StartsWith("0x"))
-        {
-            // remove "0x" for parsing
-            address = address.Substring(2).TrimStart('0');
+            if (Helper.TryParseAddress(arguments[0], out var reference))
+            {
+                foreach (var runtime in this.Runtimes)
+                {
+                    _queue.Show(runtime, reference);
+                }
+            }
         }
-
-        // remove the leading 0000 that WinDBG often add in 64 bit
-        address = address.TrimStart('0');
-
-        if (!ulong.TryParse(address, System.Globalization.NumberStyles.HexNumber,
-                System.Globalization.CultureInfo.InvariantCulture, out var reference))
-        {
-            Console.WriteLine("numeric address value expected");
-            return;
-        }
-
-        foreach (var runtime in this.Runtimes)
-        {
-            _queue.Show(runtime, reference);
-        }
+        
+        Console.WriteLine("usage: [address] or -list");
     }
 }
 
 public class ConcurrentQueue
 {
-    public void List(ClrRuntime runtime)
+    public void List(ClrRuntime runtime, string contains)
     {
         var pattern = @"^System\.Collections\.Concurrent\.ConcurrentQueue<.*>$";
         var regex = new Regex(pattern);
@@ -85,11 +72,15 @@ public class ConcurrentQueue
 
                 if (regex.IsMatch(type.Name))
                 {
-                    var isNetCore = Helper.IsNetCore(runtime);
-                    var dictionary = heap.GetObject(obj);
-                    var items = isNetCore ? GetQueueItemsCore(dictionary):  GetQueueItemsFramework(dictionary);
+                    if (string.IsNullOrEmpty(contains) ||
+                        type.Name.Contains(contains, StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        var isNetCore = Helper.IsNetCore(runtime);
+                        var dictionary = heap.GetObject(obj);
+                        var items = isNetCore ? GetQueueItemsCore(dictionary):  GetQueueItemsFramework(dictionary);
 
-                    Console.WriteLine("{0:X} {1} Length: {2}", obj, type.Name, items.Count);
+                        Console.WriteLine("{0:X} {1} Length: {2}", obj, type.Name, items.Count);
+                    }
                 }
             }
         }
