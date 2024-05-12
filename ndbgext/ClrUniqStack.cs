@@ -1,4 +1,5 @@
 using DbgEngExtension;
+using ICSharpCode.Decompiler.Util;
 using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
@@ -7,11 +8,6 @@ public class ClrUniqStack : DbgEngCommand
 {
     public ClrUniqStack(nint pUnknown, bool redirectConsoleOutput = true)
         : base(pUnknown, redirectConsoleOutput)
-    {
-    }
-
-    public ClrUniqStack(IDisposable dbgeng, bool redirectConsoleOutput = false)
-        : base(dbgeng, redirectConsoleOutput)
     {
     }
 
@@ -73,6 +69,8 @@ public class ClrUniqStack : DbgEngCommand
                     uniqueStacks.Add((metadataTokens, new List<ClrThread> {thread}));
                 }
             }
+            
+            uniqueStacks.SortBy(u => u.threads.Count);
 
             foreach (var uniqueStack in uniqueStacks)
             {
