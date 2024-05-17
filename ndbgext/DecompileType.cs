@@ -75,6 +75,20 @@ public class DecompileTypeCommand : DbgEngCommand
                             Console.WriteLine("Could not parse {0} as address", parsedMd);
                         }
                         break;
+                    case "-mt":
+                        var mt = arguments[1];
+                        if(Helper.TryParseAddress(arguments[1], out var parsedMt))
+                        {
+                            foreach (var runtime in Runtimes)
+                            {
+                                _provider.RunForMethodTable(runtime, parsedMt);
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Could not parse {0} as address", parsedMt);
+                        }
+                        break;
                 }
                 break;
             default:
@@ -99,7 +113,7 @@ public class DecompileTypeProvider
         var type = runtime.Heap.GetObjectType(address);
         if (type != null)
         {
-            var code = _decompiler.DecompileType(runtime, type.Module.Name, type);
+            var code = _decompiler.DecompileType(runtime, type.Name, type);
             Console.WriteLine(code);
         }
         else
@@ -108,16 +122,42 @@ public class DecompileTypeProvider
         }
     }
     
-    public void RunForMetadataToken(ClrRuntime runtime, int metadataToken)
+    public void RunForMethodTable(ClrRuntime runtime, ulong methodTable)
     {
         ClrType? type = null;
-        foreach (var clrModule in runtime.EnumerateModules())
+        foreach (var clrObject in runtime.Heap.EnumerateObjects())
         {
-            type = clrModule.ResolveToken(metadataToken);
+            if (clrObject.Type?.MethodTable == methodTable)
+            {
+                type = clrObject.Type;
+                break;
+            }
         }
         if (type != null)
         {
-            var code = _decompiler.DecompileType(runtime, type.Module.Name, type);
+            var code = _decompiler.DecompileType(runtime, type.Name, type);
+            Console.WriteLine(code);
+        }
+        else
+        {
+            Console.WriteLine("Could not find type at metadataToken {0:X}", methodTable);
+        }
+    }
+    
+    public void RunForMetadataToken(ClrRuntime runtime, int metadataToken)
+    {
+        ClrType? type = null;
+        foreach (var clrObject in runtime.Heap.EnumerateObjects())
+        {
+            if (clrObject.Type?.MetadataToken == metadataToken)
+            {
+                type = clrObject.Type;
+                break;
+            };
+        }
+        if (type != null)
+        {
+            var code = _decompiler.DecompileType(runtime, type.Name, type);
             Console.WriteLine(code);
         }
         else
@@ -139,7 +179,7 @@ public class DecompileTypeProvider
         }
         if (type != null)
         {
-            var code = _decompiler.DecompileType(runtime, type.Module.Name, type);
+            var code = _decompiler.DecompileType(runtime, type.Name, type);
             Console.WriteLine(code);
         }
         else

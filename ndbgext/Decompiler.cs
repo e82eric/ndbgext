@@ -98,6 +98,8 @@ public class Decompiler
     
     private bool TryDecompileMethod(ClrRuntime runtime, ClrMethod method, out SyntaxTree syntaxTree, out CSharpDecompiler decompiler)
     {
+        Console.WriteLine("Type: {0}", method.Type.Name);
+        
         syntaxTree = null;
         decompiler = null;
         PEFile peFile = GetPeFile(runtime, method.Type.Module.Name, method.Type);
