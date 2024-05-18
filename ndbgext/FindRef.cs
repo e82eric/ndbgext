@@ -25,30 +25,55 @@ public class FindRefCommand : DbgEngCommand
                     var items = _provider.Find(runtime, reference);
                     foreach (var item in items)
                     {
-                        if (item.IsArray)
-                        {
-                            Console.WriteLine("Found in array");
-                            Console.WriteLine("Array Address: {0:X}", item.Address);
-                            Console.WriteLine("Array Type: {0}", item.TypeName);
-                            Console.WriteLine("Array Index: {0}", item.ArrayIndex);
-                            Console.WriteLine("Array Item Index: {0:X}", item.ArrayItemAddress);
-                            Console.WriteLine();
-                        }
-                        else
-                        {
-                            Console.WriteLine("Found on object");
-                            Console.WriteLine("Object Address: {0:X}", item.Address);
-                            Console.WriteLine("Object Type: {0}", item.TypeName);
-                            Console.WriteLine("Object Field Name: {0}", item.FieldName);
-                            Console.WriteLine("Object Field Address: {0:X}", item.FieldAddress);
-                            Console.WriteLine();
-                        }
+                        PrintItem(item);
                     }
                 }
             }
         }
+        else if(arguments.Length == 2  && (arguments[1] == "-recurse" || arguments[1]  == "-r"))
+        {
+            if (Helper.TryParseAddress(arguments[0], out var reference))
+            {
+                foreach (var runtime in Runtimes)
+                {
+                    PrintItemAndItsReferences(runtime, reference);
+                }
+            }
+        }
         
-        Console.WriteLine("usage: [address]");
+        Console.WriteLine("usage: [address] -recurse[r]");
+    }
+
+    private void PrintItemAndItsReferences(ClrRuntime runtime, ulong reference)
+    {
+        var items = _provider.Find(runtime, reference);
+        foreach (var item in items)
+        {
+            PrintItem(item);
+            PrintItemAndItsReferences(runtime, item.Address);
+        }
+    }
+
+    private static void PrintItem(FindRefItem item)
+    {
+        if (item.IsArray)
+        {
+            Console.WriteLine("Found in array");
+            Console.WriteLine("Array Address: {0:X}", item.Address);
+            Console.WriteLine("Array Type: {0}", item.TypeName);
+            Console.WriteLine("Array Index: {0}", item.ArrayIndex);
+            Console.WriteLine("Array Item Index: {0:X}", item.ArrayItemAddress);
+            Console.WriteLine();
+        }
+        else
+        {
+            Console.WriteLine("Found on object");
+            Console.WriteLine("Object Address: {0:X}", item.Address);
+            Console.WriteLine("Object Type: {0}", item.TypeName);
+            Console.WriteLine("Object Field Name: {0}", item.FieldName);
+            Console.WriteLine("Object Field Address: {0:X}", item.FieldAddress);
+            Console.WriteLine();
+        }
     }
 }
 

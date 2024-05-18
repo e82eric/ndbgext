@@ -29,6 +29,7 @@ public static unsafe class Extension
         Console.WriteLine("decompilemethod -sp [address] | -ip [instructionPointer] | -md [methodDesc]");
         Console.WriteLine("decompiletype -ad [address] | -nm [fullTypeName]");
         Console.WriteLine("savemodule [modulename]");
+        Console.WriteLine("findref -recurse[r] address");
         return 0;
     }
 
