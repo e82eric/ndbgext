@@ -43,12 +43,44 @@ public class Tasks
                     {
                         var stateFlags = heapObject.ReadField<ulong>("m_stateFlags");
                         var item = new TasksItem();
+                        item.TaskName = heapObject.Type.Name;
                         item.Address = heapObject.Address;
                         item.TaskState = GetTaskState(stateFlags);
                         item.Method = Helper.GetDelegateMethod(runtime, heapObject);
                         result.Add(item);
+
+                        if (heapObject.TryReadObjectField("m_stateObject", out var stateObject))
+                        {
+                            if (!stateObject.IsNull && stateObject.IsValid)
+                            {
+                                item.StateMachine = stateObject.Type.Name;
+                            }
+                        }
+                        
+                        if (heapObject.TryReadObjectField("m_continuationObject", out var continuationObject))
+                        {
+                            if (!continuationObject.IsNull && continuationObject.IsValid)
+                            {
+                                if (continuationObject.TryReadObjectField("StateMachine", out var stateMachine))
+                                {
+                                    item.ContinuationStateMachine = stateMachine.Type?.Name;
+                                }
+                                else if (continuationObject.TryReadObjectField("_target", out var target))
+                                {
+                                    if (target.TryReadObjectField("m_stateMachine", out var stateMachine2))
+                                    {
+                                        item.ContinuationStateMachine = stateMachine2.Type?.Name;
+                                    }
+                                }
+                                else
+                                {
+                                    item.ContinuationStateMachine = continuationObject.Type.Name;
+                                }
+                            }
+                        }
                     }
                 }
+
             }
         }
 
@@ -82,7 +114,12 @@ public class Tasks
             {
                 if (string.IsNullOrEmpty(stateFilter) || item.TaskState == stateFilter)
                 {
-                    Console.WriteLine("{0:X} {1} {2}", item.Address, item.TaskState, item.Method);
+                    Console.WriteLine("{0:X} {1}", item.Address, item.TaskState);
+                    //Console.WriteLine("  State: {0}", item.TaskState);
+                    Console.WriteLine("  Method: {0}", item.Method);
+                    Console.WriteLine("  TaskName: {0}", item.TaskName);
+                    Console.WriteLine("  StateMachine: {0}", item.StateMachine);
+                    Console.WriteLine("  Continuation: {0}", item.ContinuationStateMachine);
                 }
             }
         }
@@ -127,6 +164,9 @@ public class Tasks
 class TasksItem
 {
     public ulong Address { get; set; }
+    public string TaskName { get; set; }
     public string TaskState { get; set; }
     public string Method { get; set; }
+    public string? ContinuationStateMachine { get; set; }
+    public string? StateMachine { get; set; }
 }
