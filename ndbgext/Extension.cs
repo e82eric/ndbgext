@@ -411,4 +411,28 @@ public static unsafe class Extension
 
         return 0;
     }
+    
+    [UnmanagedCallersOnly(EntryPoint = "taskcallstack", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int TaskCallStack(nint pUnknown, nint args)
+    {
+        return _TaskCallStack(pUnknown, args);
+    }
+    
+    private static readonly TaskCallStack TaskCallStackProvider = new();
+    private static int _TaskCallStack(nint pUnknown, nint args)
+    {
+        try
+        {
+            TaskCallStackCommand cmd = new(TaskCallStackProvider, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(TaskCallStackCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
 }
