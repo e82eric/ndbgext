@@ -418,12 +418,12 @@ public static unsafe class Extension
         return _TaskCallStack(pUnknown, args);
     }
     
-    private static readonly TaskCallStack TaskCallStackProvider = new();
+   private static readonly DumpAsyncCommand DumpAsyncCommand = new();
     private static int _TaskCallStack(nint pUnknown, nint args)
     {
         try
         {
-            TaskCallStackCommand cmd = new(TaskCallStackProvider, pUnknown);
+            TaskCallStackCommand cmd = new(DumpAsyncCommand, pUnknown);
             string? arguments = Marshal.PtrToStringAnsi(args);
             cmd.Run(arguments ?? "");
         }
