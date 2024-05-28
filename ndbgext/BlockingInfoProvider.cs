@@ -506,8 +506,3 @@ public class RunningThreadInfo
     public string RootMethod { get; set; }
     public BlockingInfo BlockingDetails { get; set; }
 }
-
-public class ThreadLockItem
-{
-    
-}

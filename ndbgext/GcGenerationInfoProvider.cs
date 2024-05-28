@@ -37,7 +37,7 @@ public class GcGenerationInfoCommand : DbgEngCommand
             foreach (var runtime in Runtimes)
             {
                 Console.WriteLine("Server Mode: {0}", runtime.Heap.IsServer);
-                Console.WriteLine("Number of heaps: {0}", runtime.Heap.LogicalHeapCount);
+                Console.WriteLine("Number of heaps: {0}", runtime.Heap.SubHeaps.Length);
             
                 var generationItems = _provider.GetGenerationItems(runtime, genNumber);
                 Helper.PrintHeapItems(generationItems);
@@ -59,25 +59,25 @@ public class GcGenerationInfoProvider
         foreach (var segment in heap.Segments)
         {
             ulong address = segment.FirstObjectAddress;
-            while (address < segment.End && address > 0)
-            {
-                var gen = segment.GetGeneration(address);
-                if (gen == genNumber)
-                {
-                    var type = segment.Heap.GetObject(address);
-                    if (!type.IsFree)
-                    {
-                        var item = new HeapItem
-                        {
-                            TypeName = type.Type.Name,
-                            Size = type.Size,
-                            MethodTable = type.Type.MethodTable
-                        };
-                        result.Add(item);
-                    }
-                }
-                address = segment.GetNextObjectAddress(address);
-            }
+            //while (address < segment.End && address > 0)
+            //{
+            //    var gen = segment.GetGeneration(address);
+            //    if (gen == genNumber)
+            //    {
+            //        var type = segment..GetObject(address);
+            //        if (!type.IsFree)
+            //        {
+            //            var item = new HeapItem
+            //            {
+            //                TypeName = type.Type.Name,
+            //                Size = type.Size,
+            //                MethodTable = type.Type.MethodTable
+            //            };
+            //            result.Add(item);
+            //        }
+            //    }
+            //    address = segment.GetNextObjectAddress(address);
+            //}
         }
 
         return result;

@@ -1,5 +1,6 @@
 ﻿using DbgEngExtension;
 using Microsoft.Diagnostics.Runtime;
+using Microsoft.Diagnostics.Runtime.AbstractDac;
 using Microsoft.Diagnostics.Runtime.DacInterface;
 
 namespace ndbgext;
@@ -59,22 +60,22 @@ public class ThreadPool
         var isNetCore = Helper.IsNetCore(runtime);
         if (!isNetCore)
         {
-            runtime.DacLibrary.SOSDacInterface.GetThreadPoolData(out var threadPoolData);
-            Console.WriteLine("CpuUtilization {0}", threadPoolData.CpuUtilization);
-            Console.WriteLine("NumCpThread {0}", threadPoolData.NumCPThreads);
-            Console.WriteLine("NumTimers {0}", threadPoolData.NumTimers);
-            Console.WriteLine("NumIdleWorkerThreads {0}", threadPoolData.NumIdleWorkerThreads);
-            Console.WriteLine("NumRetiredWorkerThreads {0}", threadPoolData.NumRetiredWorkerThreads);
-            Console.WriteLine("NumWorkingWorkerThreads {0}", threadPoolData.NumWorkingWorkerThreads);
-            Console.WriteLine("MaxFreeCPThreads {0}", threadPoolData.MaxFreeCPThreads);
-            Console.WriteLine("MaxLimitTotalWorkerThreads {0}", threadPoolData.MaxLimitTotalWorkerThreads);
-            Console.WriteLine("MinLimitTotalWorkerThreads {0}", threadPoolData.MinLimitTotalWorkerThreads);
-            Console.WriteLine("MaxFreeCPThreads {0}", threadPoolData.MaxFreeCPThreads);
-            Console.WriteLine("CurrentLimitTotalCPThreads {0}", threadPoolData.CurrentLimitTotalCPThreads);
-            Console.WriteLine("MaxLimitTotalCPThreads {0}", threadPoolData.MaxLimitTotalCPThreads);
-            Console.WriteLine("MinLimitTotalCPThreads {0}", threadPoolData.MinLimitTotalCPThreads);
-            Console.WriteLine("NumFreeCPThreads {0}", threadPoolData.NumFreeCPThreads);
-            Console.WriteLine("NumRetiredCPThreads {0}", threadPoolData.NumRetiredCPThreads);
+            //runtime.DacLibrary.SOSDacInterface.GetThreadPoolData(out var threadPoolData);
+            //Console.WriteLine("CpuUtilization {0}", runtime.ThreadPool.CpuUtilization);
+            //Console.WriteLine("NumCpThread {0}", runtime.ThreadPool.NumCPThreads);
+            //Console.WriteLine("NumTimers {0}", runtime.ThreadPool.);
+            //Console.WriteLine("NumIdleWorkerThreads {0}", runtime.ThreadPool.NumIdleWorkerThreads);
+            //Console.WriteLine("NumRetiredWorkerThreads {0}", runtime.ThreadPool.NumRetiredWorkerThreads);
+            //Console.WriteLine("NumWorkingWorkerThreads {0}", runtime.ThreadPool.NumWorkingWorkerThreads);
+            //Console.WriteLine("MaxFreeCPThreads {0}", runtime.ThreadPool.MaxFreeCPThreads);
+            //Console.WriteLine("MaxLimitTotalWorkerThreads {0}", runtime.ThreadPool.MaxLimitTotalWorkerThreads);
+            //Console.WriteLine("MinLimitTotalWorkerThreads {0}", runtime.ThreadPool.MinLimitTotalWorkerThreads);
+            //Console.WriteLine("MaxFreeCPThreads {0}", runtime.ThreadPool.MaxFreeCPThreads);
+            //Console.WriteLine("CurrentLimitTotalCPThreads {0}", runtime.ThreadPool.CurrentLimitTotalCPThreads);
+            //Console.WriteLine("MaxLimitTotalCPThreads {0}", runtime.ThreadPool.MaxLimitTotalCPThreads);
+            //Console.WriteLine("MinLimitTotalCPThreads {0}", runtime.ThreadPool.MinLimitTotalCPThreads);
+            //Console.WriteLine("NumFreeCPThreads {0}", runtime.ThreadPool.NumFreeCPThreads);
+            //Console.WriteLine("NumRetiredCPThreads {0}", runtime.ThreadPool.NumRetiredCPThreads);
         }
         else
         {
