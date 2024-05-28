@@ -1,4 +1,5 @@
-﻿using DbgEngExtension;
+﻿using System.Collections.Immutable;
+using DbgEngExtension;
 using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
@@ -111,18 +112,9 @@ public class DecompileMethodProvider
             Console.WriteLine("Method Token: {0:X}", clrMethod.MetadataToken);
             Console.WriteLine("Type Token: {0:X}", clrMethod.Type.MetadataToken);
             
-            var ilOffsets = new List<int>();
-            foreach (var ilInfo in clrMethod.ILOffsetMap)
-            {
-                if (ilInfo.StartAddress <= currentFrame.InstructionPointer && ilInfo.EndAddress >= currentFrame.InstructionPointer)
-                {
-                    if (ilInfo.ILOffset >= 0 && ilInfo.EndAddress - ilInfo.StartAddress > 0)
-                    {
-                        ilOffsets.Add(ilInfo.ILOffset);
-                    }
-                }
-            }
-            
+            var ilOffset = GetILOffsetForNativeOffset(clrMethod, currentFrame.InstructionPointer);
+            var ilOffsets = new List<int> { ilOffset };
+
             Console.WriteLine();
             PrintFrame(nextFrame, false);
             PrintFrame(currentFrame, true);
@@ -168,6 +160,45 @@ public class DecompileMethodProvider
         {
             Console.WriteLine("Could not file method frame/method for {0:X}", stackPointer);
         }
+    }
+    private static int GetILOffsetForNativeOffset(ClrMethod method, ulong ip)
+    {
+        ImmutableArray<ILToNativeMap> ilmap = method.ILOffsetMap;
+        if (ilmap.IsDefaultOrEmpty)
+        {
+            return -1;
+        }
+
+        (ulong Distance, int Offset) closest = (ulong.MaxValue, -1);
+        foreach (ILToNativeMap entry in ilmap)
+        {
+            ulong distance = GetDistance(entry, ip);
+            if (distance == 0)
+            {
+                return entry.ILOffset;
+            }
+
+            if (distance < closest.Distance)
+            {
+                closest = (distance, entry.ILOffset);
+            }
+        }
+
+        return closest.Offset;
+    }   
+    private static ulong GetDistance(ILToNativeMap entry, ulong nativeOffset)
+    {
+        ulong distance = 0;
+        if (nativeOffset < entry.StartAddress)
+        {
+            distance = entry.StartAddress - nativeOffset;
+        }
+        else if (nativeOffset > entry.EndAddress)
+        {
+            distance = nativeOffset - entry.EndAddress;
+        }
+
+        return distance;
     }
 
     public void RunForInstructionPointer(ClrRuntime runtime, ulong instructionPointer)

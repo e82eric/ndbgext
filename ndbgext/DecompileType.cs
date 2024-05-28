@@ -109,7 +109,6 @@ public class DecompileTypeProvider
     
     public void Run(ClrRuntime runtime, ulong address)
     {
-        runtime.DacLibrary.SOSDacInterface.GetAppDomainData(address, out var d);
         var type = runtime.Heap.GetObjectType(address);
         if (type != null)
         {
