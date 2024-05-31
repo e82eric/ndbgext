@@ -418,7 +418,7 @@ public static unsafe class Extension
         return _TaskCallStack(pUnknown, args);
     }
     
-   private static readonly DumpAsyncCommand DumpAsyncCommand = new();
+    private static readonly DumpAsyncCommand DumpAsyncCommand = new();
     private static int _TaskCallStack(nint pUnknown, nint args)
     {
         try
@@ -430,6 +430,30 @@ public static unsafe class Extension
         catch (Exception e)
         {
             Console.Error.WriteLine($"Failed to run {nameof(TaskCallStackCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "threadrefs", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int ThreadRefs(nint pUnknown, nint args)
+    {
+        return _ThreadRefs(pUnknown, args);
+    }
+    
+    private static readonly ThreadRefsProvider ThreadRefsProvider = new();
+    private static int _ThreadRefs(nint pUnknown, nint args)
+    {
+        try
+        {
+            ThreadRefsCommand cmd = new(ThreadRefsProvider, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(ThreadRefsCommand)} command.");
             Console.Error.WriteLine(e);
         }
 

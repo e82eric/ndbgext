@@ -167,4 +167,16 @@ public static class Helper
         return int.TryParse(value, NumberStyles.HexNumber,
             CultureInfo.InvariantCulture, out result);
     }
+    
+    public static IEnumerable<ulong> EnumeratePointersInRange(this ClrRuntime runtime, ulong start, ulong stop)
+    {
+        uint diff = (uint)runtime.DataTarget.DataReader.PointerSize;
+
+        if (start > stop)
+            for (ulong ptr = stop; ptr <= start; ptr += diff)
+                yield return ptr;
+        else
+            for (ulong ptr = stop; ptr >= start; ptr -= diff)
+                yield return ptr;
+    }
 }
