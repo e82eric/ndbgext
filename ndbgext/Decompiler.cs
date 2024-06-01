@@ -47,7 +47,7 @@ public class Decompiler
                 foreach (var offset in ilOffsets)
                 {
                     var sp = FindSeqPointByOffset(offset, sps);
-                    if (split.Length >= sp.StartLine)
+                    if (sp != null && split.Length >= sp.StartLine)
                     {
                         if (split[sp.StartLine - 1].Contains(nextMethodName))
                         {
