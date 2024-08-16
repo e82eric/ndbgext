@@ -138,8 +138,13 @@ public class Decompiler
         var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.GetAllTypeDefinitions()
             .FirstOrDefault(t => t.MetadataToken.GetHashCode() == type.MetadataToken);
 
-        var code = decompiler.DecompileType(typeDefinition.FullTypeName);
-        return code.ToString();
+        if (typeDefinition != null)
+        {
+            var code = decompiler.Decompile(typeDefinition.MetadataToken);
+            return code.ToString();
+        }
+
+        return string.Empty;
     }
 
     private PEFile GetPeFile(ClrRuntime runtime, string filePath, ClrType type)

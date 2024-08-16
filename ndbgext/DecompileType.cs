@@ -61,6 +61,16 @@ public class DecompileTypeCommand : DbgEngCommand
                         }
 
                         break;
+                    case "-ip":
+                        var ipStr = arguments[1];
+                        if (Helper.TryParseAddress(ipStr, out var ip))
+                        {
+                            foreach (var runtime in Runtimes)
+                            {
+                                _provider.RunForInstructionPointer(runtime, ip);
+                            }
+                        }
+                        break;
                     case "-md":
                         var md = arguments[1];
                         if(Helper.TryParseToken(arguments[1], out var parsedMd))
@@ -162,6 +172,16 @@ public class DecompileTypeProvider
         else
         {
             Console.WriteLine("Could not find type at metadataToken {0:X}", metadataToken);
+        }
+    }
+    
+    public void RunForInstructionPointer(ClrRuntime runtime, ulong instructionPointer)
+    {
+        var method = runtime.GetMethodByInstructionPointer(instructionPointer);
+        if (method != null && method.Type.Name != null)
+        {
+            var code = _decompiler.DecompileType(runtime, method.Type.Name, method.Type);
+            Console.WriteLine(code);
         }
     }
     
