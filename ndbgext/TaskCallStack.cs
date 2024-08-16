@@ -59,17 +59,17 @@ public class DumpAsyncCommand
             FixBrokenDependencies(allStateMachines);
             PrintOutStateMachines(allStateMachines);
             
-            var rootStateMachines = allStateMachines
+            IOrderedEnumerable<AsyncStateMachine> rootStateMachines = allStateMachines
                 .Where(m => m.Depth > 0)
                 .OrderByDescending(m => m.Depth)
                 .ThenByDescending(m => m.SwitchToMainThreadTask.Address);
-
+            
             var grouped = rootStateMachines.GroupBy(sm => sm.PrintCallStack());
             var sorted = grouped.Select(g => new
             {
                 LogicalCallContext = g.Key,
                 Count = g.Count(),
-                TaskAddresses = string.Join(' ', g.Select(i => i.Task.Address))
+                TaskAddresses = string.Join(' ', g.Select(i => i.Task.Address.ToString("x16")))
             }).ToList();
             sorted.SortBy(s => s.Count);
             
@@ -78,7 +78,7 @@ public class DumpAsyncCommand
             {
                 Console.WriteLine(group.LogicalCallContext);
                 Console.WriteLine("Number of logicl call stacks: {0}", group.Count);
-                Console.WriteLine(group.TaskAddresses);
+                Console.WriteLine($"Tasks: {group.TaskAddresses}");
                 Console.WriteLine("--------");
                 Console.WriteLine("");
             }
@@ -567,12 +567,19 @@ public class DumpAsyncCommand
         public string PrintCallStack()
         {
             var toConcat = new List<string>();
+            toConcat.Add($"{"MethodTable", -12} {"InsPtr", -12} State Name");
             var current = this;
             while (current != null)
             {
                 if (current.StateMachine.Type != null)
                 {
-                    toConcat.Add(current.StateMachine.Type.Name);
+                    var state = current.StateMachine.ReadField<Int32>("<>1__state");
+
+                    toConcat.Add(
+                        current.StateMachine.Type.MethodTable.ToString("x8") +
+                        " " + current.CodeAddress.ToString("x8") +
+                        " " + $"{state, 5}" +
+                        " " + current.StateMachine.Type.Name);
                 }
 
                 current = current.Next;
@@ -765,7 +772,7 @@ public sealed class NetCoreDumpAsyncCommand
             {
                 Console.WriteLine(group.LogicalCallStack);
                 Console.WriteLine("Number of logical call stacks: {0}", group.Count);
-                Console.WriteLine(group.TaskAddresses);
+                Console.WriteLine($"Tasks: {group.TaskAddresses}");
                 Console.WriteLine("--------");
                 Console.WriteLine("");
             }
@@ -802,7 +809,7 @@ public sealed class NetCoreDumpAsyncCommand
             foreach (KeyValuePair<string, (ClrType Type, int Count)> entry in typeCounts.OrderByDescending(e => e.Value.Count))
             {
                 WriteMethodTable(entry.Value.Type.MethodTable, asyncObject: true);
-                WriteLine($" {entry.Value.Count,-8:N0} {entry.Key}");
+                WriteLine($" {entry.Value.Count,-8:N0} {entry.Key} {entry.Value.Type.MethodTable,16:x8}");
             }
         }
 
@@ -1026,15 +1033,19 @@ public sealed class NetCoreDumpAsyncCommand
                 // on the stack, pop the next, render it, and push any continuations it may have back onto the stack.
                 Debug.Assert(stack.Count == 0);
                 stack.Push((top, depth));
+                
+                sb.Append($"{"MethodTable",12} {"InsPtr",12} State\n");
                 while (stack.Count > 0)
                 {
                     (AsyncObject frame, depth) = stack.Pop();
 
+                    sb.Append($"{frame.StateMachine.Type.MethodTable:x8} {frame.NativeCode:x8}".PadRight(25));
+                    sb.Append($" {(frame.IsStateMachine ? $"{frame.AwaitState}" : $"{DescribeTaskFlags(frame.TaskStateFlags)}"), 5}");
                     sb.Append($"{Tabs(depth)}");
                     //WriteAddress(frame.Object.Address, asyncObject: true);
                     sb.Append(" ");
                     //sb.Append(frame.Object.Type?.MethodTable ?? 0, asyncObject: true);
-                    sb.Append($" {(frame.IsStateMachine ? $"({frame.AwaitState})" : $"({DescribeTaskFlags(frame.TaskStateFlags)})")} {Describe(frame.Object)}");
+                    sb.Append($" {Describe(frame.Object)}");
                     //sb.Append(frame.NativeCode);
                     sb.Append("\n");
 
@@ -1052,11 +1063,13 @@ public sealed class NetCoreDumpAsyncCommand
                         else
                         {
                             string state = TryGetTaskStateFlags(continuation, out int flags) ? DescribeTaskFlags(flags) : "";
+                            sb.Append($"{frame.StateMachine.Type.MethodTable:x8} {frame.NativeCode:x8}".PadRight(25));
+                            sb.Append($" {state, 5}");
                             sb.Append($"{Tabs(depth + 1)}");
                             //WriteAddress(continuation.Address, asyncObject: true);
                             sb.Append(" ");
                             //WriteMethodTable(continuation.Type?.MethodTable ?? 0, asyncObject: true);
-                            sb.Append($" ({state}) {Describe(continuation)}\n");
+                            sb.Append($" {Describe(continuation)}\n");
                         }
                     }
                 }
@@ -1445,7 +1458,7 @@ public sealed class NetCoreDumpAsyncCommand
         //switch ((Console.SupportsDml, asyncObject, IntPtr.Size))
         //{
         //    case (false, _, 4):
-        //        Console.Write($"{mt,16:x8}");
+                Console.Write($"{mt,16:x8}");
         //        break;
 
         //    case (false, _, 8):
