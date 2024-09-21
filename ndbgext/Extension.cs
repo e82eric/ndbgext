@@ -17,19 +17,22 @@ public static unsafe class Extension
     public static int Help(nint pUnknown, nint args)
     {
         Console.WriteLine("clruniqstack");
+        Console.WriteLine("taskcallstack");
         Console.WriteLine("threadpoolqueue (tpq) -detail");
         Console.WriteLine("threadpoolstats (tps)");
-        Console.WriteLine("dumpconcurrentdict (dcd) -list [containsFilter]");
-        Console.WriteLine("dumpconcurrentqueue (dcq) -list [containsFilter]");
+        Console.WriteLine("dumpconcurrentdict (dcd) | -list [containsFilter] | -count");
+        Console.WriteLine("dumpconcurrentqueue (dcq) | -list [containsFilter]");
         Console.WriteLine("getmetodname (gmn) [methodptr]");
         Console.WriteLine("tasks (tks) -detail [state]");
         Console.WriteLine("dumpgen [gen0|gen1|gen2]");
         Console.WriteLine("blockinginfo");
         Console.WriteLine("heapstat");
         Console.WriteLine("decompilemethod -sp [address] | -ip [instructionPointer] | -md [methodDesc]");
-        Console.WriteLine("decompiletype -ad [address] | -nm [fullTypeName]");
+        Console.WriteLine("decompiletype -ad [address] | -nm [fullTypeName] | -ip [instructionPointer]");
         Console.WriteLine("savemodule [modulename]");
         Console.WriteLine("findref -recurse[r] address");
+        Console.WriteLine("uniqgcroot [methodTable]");
+        
         return 0;
     }
 
@@ -454,6 +457,73 @@ public static unsafe class Extension
         catch (Exception e)
         {
             Console.Error.WriteLine($"Failed to run {nameof(ThreadRefsCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "uniqgcroot", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int UniqGcRoot(nint pUnknown, nint args)
+    {
+        return _UniqGcRoot(pUnknown, args);
+    }
+
+    private static int _UniqGcRoot(nint pUnknown, nint args)
+    {
+        try
+        {
+            UniqGcRootCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(UniqGcRootCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "tselect", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int TSelect(nint pUnknown, nint args)
+    {
+        return _TSelect(pUnknown, args);
+    }
+    private static int _TSelect(nint pUnknown, nint args)
+    {
+        try
+        {
+            TSelectCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(TSelectCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "twhere", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int twhere(nint pUnknown, nint args)
+    {
+        return _twhere(pUnknown, args);
+    }
+    private static int _twhere(nint pUnknown, nint args)
+    {
+        try
+        {
+            TWhereCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(TWhereCommand)} command.");
             Console.Error.WriteLine(e);
         }
 

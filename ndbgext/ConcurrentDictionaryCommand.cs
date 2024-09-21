@@ -1,6 +1,5 @@
 ﻿using System.Text.RegularExpressions;
 using DbgEngExtension;
-using ICSharpCode.Decompiler.CSharp.Syntax;
 using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
@@ -52,7 +51,7 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
 
         var arguments = args.Split(' ');
 
-        if(arguments.Length >= 1)
+        if(arguments.Length == 1)
         {
             if (arguments[0] == "-list")
             {
@@ -66,6 +65,18 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
             {
                 Show(parsedAddress);
                 return;
+            }
+        }
+        else if (arguments.Length == 2 && arguments[0] == "-count")
+        {
+            if (Helper.TryParseAddress(arguments[1], out var address))
+            {
+                if (arguments[0] == "-count")
+                {
+                    var contains = arguments.Length == 2 ? arguments[1] : string.Empty;
+                    Count(Runtimes.First(), address);
+                    return;
+                }
             }
         }
         
@@ -98,7 +109,7 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
                     {
                         if (string.IsNullOrEmpty(contains) || type.Name.Contains(contains, StringComparison.InvariantCultureIgnoreCase))
                         {
-                            var isNetCore = IsNetkcore(runtime);
+                            var isNetCore = IsNetCore(runtime);
                             var dictionary = heap.GetObject(obj);
                             var entries = GetEntries(dictionary, isNetCore);
 
@@ -110,7 +121,7 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
         }
     }
 
-    bool IsNetkcore(ClrRuntime runtime)
+    bool IsNetCore(ClrRuntime runtime)
     {
         foreach (ClrModule module in runtime.EnumerateModules())
         {
@@ -127,19 +138,25 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
         return false;
     }
 
-    ClrArray? GetBucketsArray(ClrObject dictionaryObject, bool isNetCore)
+    private void Count(ClrRuntime runtime, ulong objAddr)
     {
-        var tables = dictionaryObject.ReadObjectField(isNetCore ? "_tables" : "m_tables");
-        var buckets = tables.ReadObjectField(isNetCore ? "_buckets" : "m_buckets");
-        if (buckets is { IsArray: true, IsValid: true })
+        //Fix this
+        var isNetCore = Helper.IsNetCore(runtime);
+
+        var obj = runtime.Heap.GetObject(objAddr);
+
+        if (!obj.IsValid)
         {
-            var bucketsArray = buckets.AsArray();
-            return bucketsArray;
+            Console.WriteLine("Not a valid object");
+            return;
         }
 
-        return null;
+        if (obj.Type.Name.StartsWith("System.Collections.Concurrent.ConcurrentDictionary<"))
+        {
+            var entries = GetEntries(obj, isNetCore);
+            Console.WriteLine("Number of Entries: {0}", entries.Count);
+        }
     }
-
 
     private void Show(ulong objAddr)
     {

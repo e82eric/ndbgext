@@ -15,10 +15,9 @@ public class ClrUniqStack : DbgEngCommand
     {
         Run();
     }
-
+    
     private void Run()
     {
-        Dictionary<string, (int Count, ulong TotalSize)> sizes = new();
         List<(List<int> metadataTokens, List<ClrThread> threads)> uniqueStacks = new();
 
         foreach (ClrRuntime runtime in Runtimes)
@@ -27,11 +26,7 @@ public class ClrUniqStack : DbgEngCommand
             {
                 if (!thread.IsAlive)
                     continue;
-
-                ClrException? currException = thread.CurrentException;
-                if (currException is ClrException ex)
-                    Console.WriteLine("Exception: {0:X} ({1}), HRESULT={2:X}", ex.Address, ex.Type.Name, ex.HResult);
-
+                
                 var metadataTokens = new List<int>();
                 foreach (ClrStackFrame frame in thread.EnumerateStackTrace())
                 {
