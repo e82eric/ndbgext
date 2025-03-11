@@ -79,6 +79,16 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
                 }
             }
         }
+        else if (arguments.Length > 2 && arguments[1] == "-select")
+        {
+            var address = arguments[0];
+            if (Helper.TryParseAddress(address, out var parsedAddress))
+            {
+                var field = arguments[2];
+                Select(parsedAddress, field);
+                return;
+            }
+        }
         
         Console.WriteLine("usage: [address] or -list");
     }
@@ -155,6 +165,68 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
         {
             var entries = GetEntries(obj, isNetCore);
             Console.WriteLine("Number of Entries: {0}", entries.Count);
+        }
+    }
+
+    private void Select(ulong objAddr, string field)
+    {
+        foreach (ClrRuntime runtime in Runtimes)
+        {
+            bool isNetCore = false;
+            foreach (ClrModule module in runtime.EnumerateModules())
+            {
+                if (string.IsNullOrEmpty(module.AssemblyName))
+                    continue;
+
+                var name = module.AssemblyName.ToLower();
+                if (name.Contains("corelib"))
+                {
+                    isNetCore = true;
+                    break;
+                }
+            }
+
+            ClrHeap heap = runtime.Heap;
+
+            ClrObject obj = heap.GetObject(objAddr);
+
+            if (!obj.IsValid)
+            {
+                Console.WriteLine("Not a valid object");
+                return;
+            }
+
+            if (obj.Type.Name.StartsWith("System.Collections.Concurrent.ConcurrentDictionary<"))
+            {
+                Console.WriteLine(obj.Type.Name);
+                var entries = GetEntries(obj, isNetCore);
+                Console.WriteLine("Number of Entries: {0}", entries.Count);
+                foreach (var entry in entries)
+                {
+                    Console.WriteLine("Node: {0:X}", entry.Address);
+                    PrintNode(entry.Key, "Key");
+                    PrintNode(entry.Value, "Value");
+                    var valueObj = heap.GetObject(entry.Value.Address);
+                    var fieldObj = valueObj.Type?.Fields.Where(f => f.Name == field).FirstOrDefault();
+                    Console.WriteLine("***Fields***");
+                    if (fieldObj != null)
+                    {
+                        switch (fieldObj.ElementType)
+                        {
+                            case ClrElementType.String:
+                                Console.WriteLine("{0}:", field);
+                                Console.WriteLine(valueObj.ReadStringField(field));
+                                break;
+                        }
+                    }
+                    
+                    Console.WriteLine("------");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Not a concurrent dictionary");
+            }
         }
     }
 
