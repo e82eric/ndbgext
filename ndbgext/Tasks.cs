@@ -3,6 +3,287 @@ using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
 
+public enum WhereOperator
+{
+    Equals,
+    GreaterThan,
+    LessThan,
+    GreaterThanOrEqual,
+    LessThanOrEqual,
+    Contains
+}
+
+public class WherePredicate
+{
+    public string Field { get; init; }
+    public string Value { get; init; }
+    public WhereOperator Operator { get; init; }
+}
+
+public class QueryCommand : DbgEngCommand
+{
+    private QueryRunner _queryRunner;
+    public QueryCommand(QueryRunner queryRunner, nint pUnknown, bool redirectConsoleOutput = true)
+        : base(pUnknown, redirectConsoleOutput)
+    {
+        _queryRunner = queryRunner;
+    }
+
+    internal void Run(string args)
+    {
+        var argsSplit = args.Split(' ');
+        if (argsSplit.Length == 4 && argsSplit[0] == "-mt" && Helper.TryParseAddress(argsSplit[1], out var methodTable))
+        {
+            if (argsSplit[2] == "select")
+            {
+                var fields = argsSplit[3].Split(',');
+
+                foreach (var runtime in this.Runtimes)
+                {
+                    _queryRunner.Run(runtime, methodTable, fields);
+                }
+            }
+            else if (argsSplit[2] == "where")
+            {
+                var predicate = argsSplit[3];
+                WherePredicate parsedPredicate = null;
+                if (predicate.Contains("|==|"))
+                {
+                    var splitPredicate = predicate.Split("|==|");
+                    if (splitPredicate.Length == 2)
+                    {
+                        parsedPredicate = new WherePredicate
+                        {
+                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.Equals
+                        };
+                    }
+                }
+                else if (predicate.Contains("|>=|"))
+                {
+                    var splitPredicate = predicate.Split("|>=|");
+                    if (splitPredicate.Length == 2)
+                    {
+                        parsedPredicate = new WherePredicate
+                        {
+                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.GreaterThanOrEqual
+                        };
+                    }
+                }
+                else if (predicate.Contains("|<=|"))
+                {
+                    var splitPredicate = predicate.Split("|<=|");
+                    if (splitPredicate.Length == 2)
+                    {
+                        parsedPredicate = new WherePredicate
+                        {
+                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.LessThanOrEqual
+                        };
+                    }
+                }
+                else if (predicate.Contains("|>|"))
+                {
+                    var splitPredicate = predicate.Split("|>|");
+                    if (splitPredicate.Length == 2)
+                    {
+                        parsedPredicate = new WherePredicate
+                        {
+                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.GreaterThan
+                        };
+                    }
+                }
+                else if (predicate.Contains("|<|"))
+                {
+                    var splitPredicate = predicate.Split("|<|");
+                    if (splitPredicate.Length == 2)
+                    {
+                        parsedPredicate = new WherePredicate
+                        {
+                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.LessThan
+                        };
+                    }
+                }
+                else if (predicate.Contains("|??|"))
+                {
+                    var splitPredicate = predicate.Split("|??|");
+                    if (splitPredicate.Length == 2)
+                    {
+                        parsedPredicate = new WherePredicate
+                        {
+                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.Contains
+                        };
+                    }
+                }
+
+                if (parsedPredicate != null)
+                {
+                    foreach (var runtime in this.Runtimes)
+                    {
+                        _queryRunner.RunWhere(runtime, methodTable, parsedPredicate);
+                    
+                    }
+                }
+            }
+        }
+    }
+
+    public class QueryRunner
+    {
+        public void RunWhere(ClrRuntime runtime, ulong methodTable, WherePredicate predicate)
+        {
+            var heap = runtime.Heap;
+            var objs = heap.EnumerateObjects().Where(o => o.Type?.MethodTable == methodTable);
+            var numberOfMatches = 0;
+            foreach (var obj in objs)
+            {
+                var fieldObj = obj.Type?.Fields.Where(f => f.Name == predicate.Field).FirstOrDefault();
+                if (fieldObj != null)
+                {
+                    var matched = false;
+                    if (fieldObj.Type?.Name == "System.Guid")
+                    {
+                        if (Guid.TryParse(predicate.Value, out var parsedGuid))
+                        {
+                            switch (predicate.Operator)
+                            {
+                                case WhereOperator.Equals:
+                                    if (obj.ReadField<Guid>(predicate.Field) == parsedGuid)
+                                    {
+                                        matched = true;
+                                    }
+                                    
+                                    break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        switch (fieldObj.ElementType)
+                        {
+                            case ClrElementType.Int32:
+                                var val = obj.ReadField<Int32>(predicate.Field);
+                                if (int.TryParse(predicate.Value, out var parsedPredicateValue))
+                                {
+                                    switch (predicate.Operator)
+                                    {
+                                        case WhereOperator.Equals:
+                                            if (val == parsedPredicateValue)
+                                            {
+                                                matched = true;
+                                            }
+
+                                            break;
+                                        case WhereOperator.GreaterThan:
+                                            if (val > parsedPredicateValue)
+                                            {
+                                                matched = true;
+                                            }
+
+                                            break;
+                                        case WhereOperator.LessThan:
+                                            if (val < parsedPredicateValue)
+                                            {
+                                                matched = true;
+                                            }
+
+                                            break;
+                                        case WhereOperator.GreaterThanOrEqual:
+                                            if (val >= parsedPredicateValue)
+                                            {
+                                                matched = true;
+                                            }
+
+                                            break;
+                                        case WhereOperator.LessThanOrEqual:
+                                            if (val >= parsedPredicateValue)
+                                            {
+                                                matched = true;
+                                            }
+
+                                            break;
+                                    }
+                                }
+
+                                break;
+                            case ClrElementType.String:
+                                var stringVal = obj.ReadStringField(predicate.Field);
+                                switch (predicate.Operator)
+                                {
+                                    case WhereOperator.Equals:
+                                        if (stringVal == predicate.Value)
+                                        {
+                                            matched = true;
+                                        }
+                                        break;
+                                    case WhereOperator.Contains:
+                                        if (stringVal.Contains(predicate.Value))
+                                        {
+                                            matched = true;
+                                        }
+                                        break;
+                                }
+                                break;
+                            case ClrElementType.Object:
+                                if (Helper.TryParseAddress(predicate.Value, out var parsedAddress))
+                                {
+                                    switch (predicate.Operator)
+                                    {
+                                        case WhereOperator.Equals:
+                                            matched = true;
+                                            break;
+                                    }
+                                }
+                                break;
+                        }
+                    }
+
+                    if (matched)
+                    {
+                        numberOfMatches++;
+                        Console.WriteLine("Address: {0:x8}", obj.Address);
+                    }
+                }
+            }
+            Console.WriteLine("Number of matches: {0}", numberOfMatches);
+        }
+        
+        public void Run(ClrRuntime runtime, ulong methodTable, IEnumerable<string> fields)
+        {
+            var heap = runtime.Heap;
+            var objs = heap.EnumerateObjects().Where(o => o.Type?.MethodTable == methodTable);
+            foreach (var obj in objs)
+            {
+                Console.WriteLine("Address {0:x8}", obj.Address);
+                foreach (var field in fields)
+                {
+                    var fieldObj = obj.Type?.Fields.Where(f => f.Name == field).FirstOrDefault();
+                    if (fieldObj != null)
+                    {
+                        if (fieldObj.Type?.Name == "System.Guid")
+                        {
+                            Console.WriteLine("  {0}: {1}", field, obj.ReadField<Guid>(field));
+                        }
+                        else
+                        {
+                            switch (fieldObj.ElementType)
+                            {
+                                case ClrElementType.Int32:
+                                    Console.WriteLine("  {0}: {1}", field, obj.ReadField<Int32>(field));
+                                    break;
+                                case ClrElementType.String:
+                                    Console.WriteLine("  {0}: {1}", field, obj.ReadStringField(field));
+                                    break;
+                                case ClrElementType.Object:
+                                    Console.WriteLine("  {0}: {1}", field, obj.ReadObjectField(field).Address);
+                                    break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 public class TasksCommand : DbgEngCommand
 {
     private readonly Tasks _tasks;

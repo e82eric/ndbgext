@@ -215,14 +215,22 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
                 var numberOfMatches = 0;
                 foreach (var entry in entries)
                 {
+                    Console.WriteLine("Entry: {0}", entry.Address);
                     var valueObj = heap.GetObject(entry.Value.Address);
                     var fieldObj = valueObj.Type?.Fields.Where(f => f.Name == field).FirstOrDefault();
                     if (fieldObj != null)
                     {
-                        switch (fieldObj.ElementType)
+                        if (fieldObj.IsValueType)
                         {
-                            case ClrElementType.String:
-                                if (valueObj.ReadStringField(field) == value)
+                            Console.WriteLine("Its a value type {0}", fieldObj.Type.Name);
+                            if (fieldObj.Type.Name == "System.Guid")
+                            {
+                                Console.WriteLine("Its a guid");
+                                var fieldGuid = valueObj.ReadField<Guid>(field);
+                                Console.WriteLine("Field Guid: {0}", fieldGuid);
+                                var valueGuid = Guid.Parse(value);
+                                Console.WriteLine("Value Guid: {0}", fieldGuid);
+                                if (fieldGuid == valueGuid)
                                 {
                                     Console.WriteLine("Node: {0:X}", entry.Address);
                                     PrintNode(entry.Key, "Key");
@@ -230,8 +238,29 @@ public class ConcurrentDictionaryCommand : DbgEngCommand
                                     Console.WriteLine("------");
                                     numberOfMatches++;
                                 }
-                                break;
+                            }
                         }
+                        else
+                        {
+                            Console.WriteLine("Its a reference type {0}", fieldObj.Type.Name);
+                            switch (fieldObj.ElementType)
+                            {
+                                case ClrElementType.String:
+                                    if (valueObj.ReadStringField(field) == value)
+                                    {
+                                        Console.WriteLine("Node: {0:X}", entry.Address);
+                                        PrintNode(entry.Key, "Key");
+                                        PrintNode(entry.Value, "Value");
+                                        Console.WriteLine("------");
+                                        numberOfMatches++;
+                                    }
+                                    break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Field is null");
                     }
                 }
                 Console.WriteLine("Number of Matches: {0}", numberOfMatches);

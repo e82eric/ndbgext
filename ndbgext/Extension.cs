@@ -508,6 +508,30 @@ public static unsafe class Extension
         return 0;
     }
     
+    [UnmanagedCallersOnly(EntryPoint = "tquery", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int tquery(nint pUnknown, nint args)
+    {
+        return _tquery(pUnknown, args);
+    }
+
+    private static readonly QueryCommand.QueryRunner _queryRunner = new();
+    private static int _tquery(nint pUnknown, nint args)
+    {
+        try
+        {
+            QueryCommand cmd = new(_queryRunner, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(QueryCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+    
     [UnmanagedCallersOnly(EntryPoint = "twhere", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int twhere(nint pUnknown, nint args)
     {
