@@ -138,6 +138,12 @@ public static class Helper
 
     public static bool TryParseAddress(string value, out ulong result)
     {
+        if (value == "0")
+        {
+            result = 0;
+            return true;
+        }
+        
         result = default;
         if (value.StartsWith("0x"))
         {

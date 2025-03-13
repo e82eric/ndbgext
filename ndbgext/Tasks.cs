@@ -10,7 +10,8 @@ public enum WhereOperator
     LessThan,
     GreaterThanOrEqual,
     LessThanOrEqual,
-    Contains
+    Contains,
+    NotEquals
 }
 
 public class WherePredicate
@@ -113,6 +114,17 @@ public class QueryCommand : DbgEngCommand
                         };
                     }
                 }
+                else if (predicate.Contains("|!=|"))
+                {
+                    var splitPredicate = predicate.Split("|!=|");
+                    if (splitPredicate.Length == 2)
+                    {
+                        parsedPredicate = new WherePredicate
+                        {
+                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.NotEquals
+                        };
+                    }
+                }
 
                 if (parsedPredicate != null)
                 {
@@ -170,35 +182,36 @@ public class QueryCommand : DbgEngCommand
                                             {
                                                 matched = true;
                                             }
-
+                                            break;
+                                        case WhereOperator.NotEquals:
+                                            if (val != parsedPredicateValue)
+                                            {
+                                                matched = true;
+                                            }
                                             break;
                                         case WhereOperator.GreaterThan:
                                             if (val > parsedPredicateValue)
                                             {
                                                 matched = true;
                                             }
-
                                             break;
                                         case WhereOperator.LessThan:
                                             if (val < parsedPredicateValue)
                                             {
                                                 matched = true;
                                             }
-
                                             break;
                                         case WhereOperator.GreaterThanOrEqual:
                                             if (val >= parsedPredicateValue)
                                             {
                                                 matched = true;
                                             }
-
                                             break;
                                         case WhereOperator.LessThanOrEqual:
                                             if (val >= parsedPredicateValue)
                                             {
                                                 matched = true;
                                             }
-
                                             break;
                                     }
                                 }
@@ -214,6 +227,12 @@ public class QueryCommand : DbgEngCommand
                                             matched = true;
                                         }
                                         break;
+                                    case WhereOperator.NotEquals:
+                                        if (stringVal != predicate.Value)
+                                        {
+                                            matched = true;
+                                        }
+                                        break;
                                     case WhereOperator.Contains:
                                         if (stringVal.Contains(predicate.Value))
                                         {
@@ -222,13 +241,22 @@ public class QueryCommand : DbgEngCommand
                                         break;
                                 }
                                 break;
-                            case ClrElementType.Object:
+                            case ClrElementType.Class:
                                 if (Helper.TryParseAddress(predicate.Value, out var parsedAddress))
                                 {
                                     switch (predicate.Operator)
                                     {
                                         case WhereOperator.Equals:
-                                            matched = true;
+                                            if (obj.ReadObjectField(predicate.Field).Address == parsedAddress)
+                                            {
+                                                matched = true;
+                                            }
+                                            break;
+                                        case WhereOperator.NotEquals:
+                                            if (obj.ReadObjectField(predicate.Field).Address != parsedAddress)
+                                            {
+                                                matched = true;
+                                            }
                                             break;
                                     }
                                 }
@@ -273,7 +301,8 @@ public class QueryCommand : DbgEngCommand
                                     Console.WriteLine("  {0}: {1}", field, obj.ReadStringField(field));
                                     break;
                                 case ClrElementType.Object:
-                                    Console.WriteLine("  {0}: {1}", field, obj.ReadObjectField(field).Address);
+                                case ClrElementType.Class:
+                                    Console.WriteLine("  {0}: {1:x8}", field, obj.ReadObjectField(field).Address);
                                     break;
                             }
                         }
