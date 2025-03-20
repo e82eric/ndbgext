@@ -21,6 +21,56 @@ public class WherePredicate
     public WhereOperator Operator { get; init; }
 }
 
+public class QueryExpressionParser
+{
+    private static readonly Dictionary<string, WhereOperator> Operators = new Dictionary<string, WhereOperator>()
+    {
+        { " == ", WhereOperator.Equals },
+        { " >= ", WhereOperator.GreaterThanOrEqual },
+        { " <= ", WhereOperator.LessThanOrEqual },
+        { " > ", WhereOperator.GreaterThan },
+        { " < ", WhereOperator.LessThan },
+        { " != ", WhereOperator.NotEquals }
+    };
+    
+    public bool ParseWherePredicate(string expression, out WherePredicate result)
+    {
+        result = null;
+        var operatorIndex = -1;
+        var opStrLen = -1;
+        WhereOperator? op = null;
+
+        foreach (var opString in Operators.Keys)
+        {
+            int index = expression.IndexOf(opString, StringComparison.Ordinal);
+            if (index >= 0)
+            {
+                operatorIndex = index;
+                op = Operators[opString];
+                opStrLen = opString.Length;
+                break;
+            }            
+        }
+
+        if (op != null)
+        {
+            var field = expression.Substring(0, operatorIndex).Trim();
+            var value = expression.Substring(
+                operatorIndex + opStrLen,
+                expression.Length - operatorIndex - opStrLen).Trim();
+            result = new WherePredicate()
+            {
+                Field = field,
+                Operator = op.Value,
+                Value = value
+            };
+            return true;
+        }
+        
+        return false;
+    }
+}
+
 public class QueryCommand : DbgEngCommand
 {
     private QueryRunner _queryRunner;
@@ -32,8 +82,8 @@ public class QueryCommand : DbgEngCommand
 
     internal void Run(string args)
     {
-        var argsSplit = args.Split(' ');
-        if (argsSplit.Length == 4 && argsSplit[0] == "-mt" && Helper.TryParseAddress(argsSplit[1], out var methodTable))
+        var argsSplit = args.Split(new char[] { ' ' }, 4);
+        if (argsSplit.Length >= 4 && argsSplit[0] == "-mt" && Helper.TryParseAddress(argsSplit[1], out var methodTable))
         {
             if (argsSplit[2] == "select")
             {
@@ -46,92 +96,13 @@ public class QueryCommand : DbgEngCommand
             }
             else if (argsSplit[2] == "where")
             {
-                var predicate = argsSplit[3];
-                WherePredicate parsedPredicate = null;
-                if (predicate.Contains("|==|"))
-                {
-                    var splitPredicate = predicate.Split("|==|");
-                    if (splitPredicate.Length == 2)
-                    {
-                        parsedPredicate = new WherePredicate
-                        {
-                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.Equals
-                        };
-                    }
-                }
-                else if (predicate.Contains("|>=|"))
-                {
-                    var splitPredicate = predicate.Split("|>=|");
-                    if (splitPredicate.Length == 2)
-                    {
-                        parsedPredicate = new WherePredicate
-                        {
-                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.GreaterThanOrEqual
-                        };
-                    }
-                }
-                else if (predicate.Contains("|<=|"))
-                {
-                    var splitPredicate = predicate.Split("|<=|");
-                    if (splitPredicate.Length == 2)
-                    {
-                        parsedPredicate = new WherePredicate
-                        {
-                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.LessThanOrEqual
-                        };
-                    }
-                }
-                else if (predicate.Contains("|>|"))
-                {
-                    var splitPredicate = predicate.Split("|>|");
-                    if (splitPredicate.Length == 2)
-                    {
-                        parsedPredicate = new WherePredicate
-                        {
-                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.GreaterThan
-                        };
-                    }
-                }
-                else if (predicate.Contains("|<|"))
-                {
-                    var splitPredicate = predicate.Split("|<|");
-                    if (splitPredicate.Length == 2)
-                    {
-                        parsedPredicate = new WherePredicate
-                        {
-                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.LessThan
-                        };
-                    }
-                }
-                else if (predicate.Contains("|??|"))
-                {
-                    var splitPredicate = predicate.Split("|??|");
-                    if (splitPredicate.Length == 2)
-                    {
-                        parsedPredicate = new WherePredicate
-                        {
-                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.Contains
-                        };
-                    }
-                }
-                else if (predicate.Contains("|!=|"))
-                {
-                    var splitPredicate = predicate.Split("|!=|");
-                    if (splitPredicate.Length == 2)
-                    {
-                        parsedPredicate = new WherePredicate
-                        {
-                            Field = splitPredicate[0], Value = splitPredicate[1], Operator = WhereOperator.NotEquals
-                        };
-                    }
-                }
-
-                if (parsedPredicate != null)
+                var parser = new QueryExpressionParser();
+                var predicateStr = argsSplit[3];
+                if (parser.ParseWherePredicate(predicateStr, out var predicate))
                 {
                     foreach (var runtime in this.Runtimes)
                     {
-                        _queryRunner.RunWhere(runtime, methodTable, parsedPredicate);
-                    
+                        _queryRunner.RunWhere(runtime, methodTable, predicate);
                     }
                 }
             }
@@ -147,134 +118,118 @@ public class QueryCommand : DbgEngCommand
             var numberOfMatches = 0;
             foreach (var obj in objs)
             {
-                var fieldObj = obj.Type?.Fields.Where(f => f.Name == predicate.Field).FirstOrDefault();
-                if (fieldObj != null)
+                var matched = false;
+                if (!TryFindFieldValue(predicate.Field, obj, out var foundMap))
                 {
-                    var matched = false;
-                    if (fieldObj.Type?.Name == "System.Guid")
+                    continue;
+                }
+
+                var typeName = foundMap.instanceField.Type?.Name;
+                var fieldName = foundMap.instanceField.Name;
+                IComparable fieldValue = null;
+                IComparable predicateValue = null;
+                if (typeName == "System.Guid")
+                {
+                    if (Guid.TryParse(predicate.Value, out var parsed))
                     {
-                        if (Guid.TryParse(predicate.Value, out var parsedGuid))
-                        {
-                            switch (predicate.Operator)
+                        fieldValue = foundMap.clrObject.ReadField<Guid>(fieldName);
+                        predicateValue = parsed;
+                    }
+                }
+                else if (typeName == "System.DateTime")
+                {
+                    if (DateTime.TryParse(predicate.Value, out var parsed))
+                    {
+                        fieldValue = foundMap.clrObject.ReadField<DateTime>(fieldName);
+                        predicateValue = parsed;
+                    }
+                }
+                else if (typeName == "System.DateTimeOffset")
+                {
+                    if (DateTimeOffset.TryParse(predicate.Value, out var parsed))
+                    {
+                        fieldValue = foundMap.clrObject.ReadField<DateTimeOffset>(fieldName);
+                        predicateValue = parsed;
+                    }
+                }
+                else
+                {
+                    switch (foundMap.instanceField.ElementType)
+                    {
+                        case ClrElementType.Int32:
+                            if (int.TryParse(predicate.Value, out var parsedPredicateValue))
                             {
-                                case WhereOperator.Equals:
-                                    if (obj.ReadField<Guid>(predicate.Field) == parsedGuid)
-                                    {
-                                        matched = true;
-                                    }
-                                    
-                                    break;
+                                fieldValue = foundMap.clrObject.ReadField<Int32>(fieldName);
+                                predicateValue = parsedPredicateValue;
                             }
-                        }
+                            break;
+                        case ClrElementType.String:
+                            fieldValue = foundMap.clrObject.ReadStringField(fieldName);
+                            predicateValue = predicate.Value;
+                            break;
+                        case ClrElementType.Class:
+                            if (Helper.TryParseAddress(predicate.Value, out var parsedAddress))
+                            {
+                                fieldValue = foundMap.clrObject.ReadObjectField(fieldName).Address;
+                                predicateValue = parsedAddress;
+                            }
+                            break;
                     }
-                    else
+                }
+                    
+                static int CompareObjects(object left, object right)
+                {
+                    if (left is IComparable comparable)
                     {
-                        switch (fieldObj.ElementType)
+                        return comparable.CompareTo(right);
+                    }
+                    throw new ArgumentException("The type does not implement IComparable", nameof(left));
+                }
+                    
+                switch (predicate.Operator)
+                {
+                    case WhereOperator.GreaterThan:
+                        if (CompareObjects(fieldValue, predicateValue) > 0)
                         {
-                            case ClrElementType.Int32:
-                                var val = obj.ReadField<Int32>(predicate.Field);
-                                if (int.TryParse(predicate.Value, out var parsedPredicateValue))
-                                {
-                                    switch (predicate.Operator)
-                                    {
-                                        case WhereOperator.Equals:
-                                            if (val == parsedPredicateValue)
-                                            {
-                                                matched = true;
-                                            }
-                                            break;
-                                        case WhereOperator.NotEquals:
-                                            if (val != parsedPredicateValue)
-                                            {
-                                                matched = true;
-                                            }
-                                            break;
-                                        case WhereOperator.GreaterThan:
-                                            if (val > parsedPredicateValue)
-                                            {
-                                                matched = true;
-                                            }
-                                            break;
-                                        case WhereOperator.LessThan:
-                                            if (val < parsedPredicateValue)
-                                            {
-                                                matched = true;
-                                            }
-                                            break;
-                                        case WhereOperator.GreaterThanOrEqual:
-                                            if (val >= parsedPredicateValue)
-                                            {
-                                                matched = true;
-                                            }
-                                            break;
-                                        case WhereOperator.LessThanOrEqual:
-                                            if (val >= parsedPredicateValue)
-                                            {
-                                                matched = true;
-                                            }
-                                            break;
-                                    }
-                                }
-
-                                break;
-                            case ClrElementType.String:
-                                var stringVal = obj.ReadStringField(predicate.Field);
-                                switch (predicate.Operator)
-                                {
-                                    case WhereOperator.Equals:
-                                        if (stringVal == predicate.Value)
-                                        {
-                                            matched = true;
-                                        }
-                                        break;
-                                    case WhereOperator.NotEquals:
-                                        if (stringVal != predicate.Value)
-                                        {
-                                            matched = true;
-                                        }
-                                        break;
-                                    case WhereOperator.Contains:
-                                        if (stringVal.Contains(predicate.Value))
-                                        {
-                                            matched = true;
-                                        }
-                                        break;
-                                }
-                                break;
-                            case ClrElementType.Class:
-                                if (Helper.TryParseAddress(predicate.Value, out var parsedAddress))
-                                {
-                                    switch (predicate.Operator)
-                                    {
-                                        case WhereOperator.Equals:
-                                            if (obj.ReadObjectField(predicate.Field).Address == parsedAddress)
-                                            {
-                                                matched = true;
-                                            }
-                                            break;
-                                        case WhereOperator.NotEquals:
-                                            if (obj.ReadObjectField(predicate.Field).Address != parsedAddress)
-                                            {
-                                                matched = true;
-                                            }
-                                            break;
-                                    }
-                                }
-                                break;
+                            matched = true;
                         }
-                    }
-
-                    if (matched)
-                    {
-                        numberOfMatches++;
-                        Console.WriteLine("Address: {0:x8}", obj.Address);
-                    }
+                        break;
+                    case WhereOperator.GreaterThanOrEqual:
+                        if (CompareObjects(fieldValue, predicateValue) >= 0)
+                        {
+                            matched = true;
+                        }
+                        break;
+                    case WhereOperator.LessThan:
+                        if (CompareObjects(fieldValue, predicateValue) < 0)
+                        {
+                            matched = true;
+                        }
+                        break;
+                    case WhereOperator.LessThanOrEqual:
+                        if (CompareObjects(fieldValue, predicateValue) <= 0)
+                        {
+                            matched = true;
+                        }
+                        break;
+                    case WhereOperator.Equals:
+                        if (Equals(fieldValue, predicateValue))
+                        {
+                            matched = true;
+                        }
+                        break;
+                }
+                    
+                if (matched)
+                {
+                    numberOfMatches++;
+                    Console.WriteLine("Address: {0:x8}", obj.Address);
                 }
             }
             Console.WriteLine("Number of matches: {0}", numberOfMatches);
         }
         
-        public void Run(ClrRuntime runtime, ulong methodTable, IEnumerable<string> fields)
+        public void Run(ClrRuntime runtime, ulong methodTable, IReadOnlyList<string> fields)
         {
             var heap = runtime.Heap;
             var objs = heap.EnumerateObjects().Where(o => o.Type?.MethodTable == methodTable);
@@ -283,31 +238,57 @@ public class QueryCommand : DbgEngCommand
                 Console.WriteLine("Address {0:x8}", obj.Address);
                 foreach (var field in fields)
                 {
-                    var fieldObj = obj.Type?.Fields.Where(f => f.Name == field).FirstOrDefault();
-                    if (fieldObj != null)
+                    PrintField(field, obj);
+                }
+            }
+        }
+        
+        private static bool TryFindFieldValue(string field, ClrObject obj, out (ClrInstanceField instanceField, ClrObject clrObject) result)
+        {
+            result = default;
+            ClrObject current = obj;
+            var splitFields = field.Split(".");
+            for (int i = 0; i < splitFields.Length; i++)
+            {
+                var splitFieldObj = current.Type?.Fields.Where(f => f.Name == splitFields[i]).FirstOrDefault();
+                if (splitFieldObj != null)
+                {
+                    if (i < splitFields.Length - 1)
                     {
-                        if (fieldObj.Type?.Name == "System.Guid")
-                        {
-                            Console.WriteLine("  {0}: {1}", field, obj.ReadField<Guid>(field));
-                        }
-                        else
-                        {
-                            switch (fieldObj.ElementType)
-                            {
-                                case ClrElementType.Int32:
-                                    Console.WriteLine("  {0}: {1}", field, obj.ReadField<Int32>(field));
-                                    break;
-                                case ClrElementType.String:
-                                    Console.WriteLine("  {0}: {1}", field, obj.ReadStringField(field));
-                                    break;
-                                case ClrElementType.Object:
-                                case ClrElementType.Class:
-                                    Console.WriteLine("  {0}: {1:x8}", field, obj.ReadObjectField(field).Address);
-                                    break;
-                            }
-                        }
+                        current = current.ReadObjectField(splitFields[i]);
+                    }
+                    else
+                    {
+                        result = (splitFieldObj, current);
+                        return true;
                     }
                 }
+            }
+
+            return false;
+        }
+
+        private static void PrintField(string field, ClrObject obj)
+        {
+            if (TryFindFieldValue(field, obj, out var foundMap))
+            {
+                var typeName = foundMap.instanceField.Type?.Name;
+                var fieldName = foundMap.instanceField.Name;
+                object value = typeName switch
+                {
+                    "System.Guid" => foundMap.clrObject.ReadField<Guid>(fieldName),
+                    "System.DateTime" => foundMap.clrObject.ReadField<DateTime>(fieldName),
+                    "System.DateTimeOffset" => foundMap.clrObject.ReadField<DateTimeOffset>(fieldName),
+                    _ => foundMap.instanceField.ElementType switch
+                    {
+                        ClrElementType.Int32 => foundMap.clrObject.ReadField<int>(fieldName),
+                        ClrElementType.String => foundMap.clrObject.ReadStringField(fieldName),
+                        ClrElementType.Object or ClrElementType.Class => foundMap.clrObject.ReadObjectField(fieldName).Address.ToString("x8"),
+                        _ => "Unsupported field type"
+                    }
+                };
+
+                Console.WriteLine("  {0}: {1}", field, value);
             }
         }
     }
