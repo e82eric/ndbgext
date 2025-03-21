@@ -1,4 +1,5 @@
-﻿using DbgEngExtension;
+﻿using System.Text.RegularExpressions;
+using DbgEngExtension;
 using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
@@ -10,7 +11,7 @@ public enum WhereOperator
     LessThan,
     GreaterThanOrEqual,
     LessThanOrEqual,
-    Contains,
+    Matches,
     NotEquals
 }
 
@@ -30,7 +31,8 @@ public class QueryExpressionParser
         { " <= ", WhereOperator.LessThanOrEqual },
         { " > ", WhereOperator.GreaterThan },
         { " < ", WhereOperator.LessThan },
-        { " != ", WhereOperator.NotEquals }
+        { " != ", WhereOperator.NotEquals },
+        { " =~ ", WhereOperator.Matches }
     };
     
     public bool ParseWherePredicate(string expression, out WherePredicate result)
@@ -216,6 +218,16 @@ public class QueryCommand : DbgEngCommand
                         if (Equals(fieldValue, predicateValue))
                         {
                             matched = true;
+                        }
+                        break;
+                    case WhereOperator.Matches:
+                        if (fieldValue is string && predicateValue is string)
+                        {
+                            var regex = new Regex((string)predicateValue);
+                            if(regex.IsMatch((string)fieldValue))
+                            {
+                                matched = true;
+                            }
                         }
                         break;
                 }
