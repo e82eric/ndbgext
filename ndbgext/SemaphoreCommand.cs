@@ -50,6 +50,10 @@ public class SemaphoreCommandRunner
             foreach (var asyncWait in asyncWaits)
             {
                 Console.WriteLine("    Address: {0:x8}", asyncWait.Address);
+                if (TaskHelper.TryGetTaskItem(runtime, asyncWait, out var task))
+                {
+                    Console.WriteLine("      Continuation: {0}", task.ContinuationStateMachine);
+                }
             }
         }
     }
