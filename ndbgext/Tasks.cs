@@ -17,14 +17,14 @@ public enum WhereOperator
 
 public class WherePredicate
 {
-    public string Field { get; init; }
-    public string Value { get; init; }
+    public required string Field { get; init; }
+    public required string Value { get; init; }
     public WhereOperator Operator { get; init; }
 }
 
 public class QueryExpressionParser
 {
-    private static readonly Dictionary<string, WhereOperator> Operators = new Dictionary<string, WhereOperator>()
+    private static readonly Dictionary<string, WhereOperator> Operators = new()
     {
         { " == ", WhereOperator.Equals },
         { " >= ", WhereOperator.GreaterThanOrEqual },
@@ -35,7 +35,7 @@ public class QueryExpressionParser
         { " =~ ", WhereOperator.Matches }
     };
     
-    public bool ParseWherePredicate(string expression, out WherePredicate result)
+    public static bool ParseWherePredicate(string expression, out WherePredicate? result)
     {
         result = null;
         var operatorIndex = -1;
@@ -75,7 +75,7 @@ public class QueryExpressionParser
 
 public class QueryCommand : DbgEngCommand
 {
-    private QueryRunner _queryRunner;
+    private readonly QueryRunner _queryRunner;
     public QueryCommand(QueryRunner queryRunner, nint pUnknown, bool redirectConsoleOutput = true)
         : base(pUnknown, redirectConsoleOutput)
     {
@@ -84,8 +84,8 @@ public class QueryCommand : DbgEngCommand
 
     internal void Run(string args)
     {
-        var argsSplit = args.Split(new char[] { ' ' }, 4);
-        if (argsSplit.Length >= 4 && argsSplit[0] == "-mt" && Helper.TryParseAddress(argsSplit[1], out var methodTable))
+        var argsSplit = args.Split([' '], 4);
+        if (argsSplit.Length >= 4 && (argsSplit[0] == "-mt" || argsSplit[0] == "-addr") && Helper.TryParseAddress(argsSplit[1], out var methodTableOrAddress))
         {
             if (argsSplit[2] == "select")
             {
@@ -93,123 +93,369 @@ public class QueryCommand : DbgEngCommand
 
                 foreach (var runtime in this.Runtimes)
                 {
-                    _queryRunner.Run(runtime, methodTable, fields);
+                    switch (argsSplit[0])
+                    {
+                        case "-mt":
+                            _queryRunner.RunSelect(runtime, methodTableOrAddress, fields);
+                            break;
+                        case "-addr":
+                            _queryRunner.RunSelectForAddress(runtime, methodTableOrAddress, fields);
+                            break;
+                    }
                 }
             }
             else if (argsSplit[2] == "where")
             {
-                var parser = new QueryExpressionParser();
                 var predicateStr = argsSplit[3];
-                if (parser.ParseWherePredicate(predicateStr, out var predicate))
+                if (QueryExpressionParser.ParseWherePredicate(predicateStr, out var predicate) && predicate != null)
                 {
-                    foreach (var runtime in this.Runtimes)
+                    foreach (var runtime in Runtimes)
                     {
-                        _queryRunner.RunWhere(runtime, methodTable, predicate);
+                        _queryRunner.RunWhere(runtime, methodTableOrAddress, predicate);
                     }
                 }
             }
         }
     }
+    
+    private class TypeHandlers
+    {
+        public required Func<string, (bool Success, IComparable? Value)> ParseFunc { get; init; }
+        public required Func<ClrRuntime, ulong, IComparable?> ReadFunc { get; init; }
+    }
+
+    private class ClrInstanceFieldPath
+    {
+        public required ClrInstanceField Value { get; init; }
+        public ClrInstanceFieldPath? Next { get; set; }
+    }
 
     public class QueryRunner
     {
+        private static readonly Dictionary<string, TypeHandlers> TypeNameMap = new()
+        {
+            {
+                "System.Guid", new TypeHandlers
+                {
+                    ParseFunc = s =>
+                    {
+                        var success = Guid.TryParse(s, out var result);
+                        return (success, result);
+                    },
+                    ReadFunc = (runtime, address) =>
+                    {
+                        return runtime.DataTarget.DataReader.Read<Guid>(address);
+                    }
+                }
+            },
+            {
+                "System.DateTime", new TypeHandlers
+                {
+                    ParseFunc = s =>
+                    {
+                        var success = DateTime.TryParse(s, out var result);
+                        return (success, result);
+                    },
+                    ReadFunc = (runtime, address) =>
+                    {
+                        return runtime.DataTarget.DataReader.Read<DateTime>(address);
+                    }
+                }
+            },
+            {
+                "System.DateTimeOffset", new TypeHandlers
+                {
+                    ParseFunc = s =>
+                    {
+                        var success = DateTimeOffset.TryParse(s, out var result);
+                        return (success, result);
+                    },
+                    ReadFunc = (runtime, address) =>
+                    {
+                        return runtime.DataTarget.DataReader.Read<DateTimeOffset>(address);
+                    }
+                }
+            }
+        };
+        
+        private static readonly Dictionary<ClrElementType, TypeHandlers> ElementTypeMap = new()
+        {
+            { ClrElementType.Int32, new TypeHandlers()
+            {
+                ParseFunc = s =>
+                {
+                    var success = Int32.TryParse(s, out var result);
+                    return (success, result);
+                },
+                ReadFunc = (runtime, address) =>
+                {
+                    return runtime.DataTarget.DataReader.Read<Int32>(address);
+                }
+            }},
+            { ClrElementType.String, new TypeHandlers
+            {
+                ParseFunc = s =>
+                {
+                    return (true, s);
+                },
+                ReadFunc = (runtime, address) =>
+                {
+                    var clrObject = runtime.Heap.GetObject(address);
+                    return clrObject.AsString();
+                }
+            }},
+            { ClrElementType.Class, new TypeHandlers
+            {
+                ParseFunc = s =>
+                {
+                    var success = Helper.TryParseAddress(s, out var result);
+                    return (success, result);
+                },
+                ReadFunc = (runtime, address) =>
+                {
+                    var clrObject = runtime.Heap.GetObject(address);
+                    return clrObject.Address;
+                }
+            }},
+        };
+        
+        private static bool TryParsePredicate(ClrType type, WherePredicate predicate, out IComparable? result)
+        {
+            result = null;
+            if (type.Name == null)
+            {
+                return false;
+            }
+
+            if (!TypeNameMap.TryGetValue(type.Name, out var handlers))
+            {
+                if (!ElementTypeMap.TryGetValue(type.ElementType, out handlers))
+                {
+                    return false;
+                }
+            }
+
+            var parseResult = handlers.ParseFunc(predicate.Value);
+            result = parseResult.Value;
+            return parseResult.Success;
+        }
+
+        private static bool TryGetFieldValue(ClrRuntime runtime, ClrType type, ulong address, out IComparable? result)
+        {
+            result = null;
+            if (type.Name == null)
+            {
+                return false;
+            }
+
+            if (!TypeNameMap.TryGetValue(type.Name, out var handlers))
+            {
+                if (!ElementTypeMap.TryGetValue(type.ElementType, out handlers))
+                {
+                    return false;
+                }
+            }
+
+            var readResult = handlers.ReadFunc(runtime, address);
+            result = readResult;
+            return true;
+        }
+
+        private static bool TryGetFieldValueFromFieldPath(
+            ClrRuntime runtime,
+            ClrObject obj,
+            ClrInstanceFieldPath fieldPath,
+            out IComparable? result)
+        {
+            result = null;
+            var current = fieldPath;
+            var currentObject = obj;
+            while (current != null)
+            {
+                var instanceField = current.Value;
+                if (instanceField.Type == null)
+                {
+                    return false;
+                }
+                
+                if (!TryGetAddress(runtime, currentObject, instanceField, out var fieldAddress))
+                {
+                    return false;
+                }
+
+                if (current.Next == null)
+                {
+                    var success = TryGetFieldValue(runtime, instanceField.Type, fieldAddress, out result);
+                    return success;
+                }
+
+                currentObject = runtime.Heap.GetObject(fieldAddress);
+                current = current.Next;
+            }
+
+            return false;
+        }
+        
+        private static bool TryParseFieldPathFromFieldExpression(string field, ClrType type, out ClrInstanceFieldPath? head)
+        {
+            head = null;
+            ClrInstanceFieldPath? tail = null;
+            var splitFields = field.Split(".");
+            var current = type;
+            for (var i = 0; i < splitFields.Length; i++)
+            {
+                var localI = i;
+                var splitFieldObj = current?.Fields.FirstOrDefault(f => f.Name == splitFields[localI]);
+                if (splitFieldObj == null)
+                {
+                    return false;
+                }
+
+                if (head == null)
+                {
+                    head = new ClrInstanceFieldPath
+                    {
+                        Value = splitFieldObj
+                    };
+                    tail = head;
+                }
+                else
+                {
+                    tail.Next = new ClrInstanceFieldPath
+                    {
+                        Value = splitFieldObj
+                    };
+                    tail = tail.Next;
+                }
+                current = tail.Value.Type;
+
+                if (i >= splitFields.Length - 1)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryGetAddress(ClrRuntime runtime, ClrObject obj, ClrInstanceField field, out ulong result)
+        {
+            result = 0;
+            var fieldAddress = obj.Address + (ulong)(field.Offset + IntPtr.Size);
+            if (!field.IsValueType)
+            {
+                if (!runtime.DataTarget.DataReader.ReadPointer(fieldAddress, out var fieldPtr))
+                {
+                    return false;
+                }
+
+                fieldAddress = fieldPtr;
+            }
+
+            result = fieldAddress;
+            return true;
+        }
+
         public void RunWhere(ClrRuntime runtime, ulong methodTable, WherePredicate predicate)
         {
+            IComparable? fieldValue;
+            IComparable? predicateValue;
             var heap = runtime.Heap;
             var objs = heap.EnumerateObjects().Where(o => o.Type?.MethodTable == methodTable);
+            var type = runtime.GetTypeByMethodTable(methodTable);
+            if (type == null)
+            {
+                return;
+            }
+
+            ClrType? predicateFieldType;
+            ClrInstanceFieldPath? instanceFieldPath = null;
+            if (predicate.Field == "$this")
+            {
+                predicateFieldType = type;
+            }
+            else
+            {
+                if (!TryParseFieldPathFromFieldExpression(predicate.Field, type, out instanceFieldPath))
+                {
+                    return;
+                }
+
+                if (instanceFieldPath == null || instanceFieldPath.Value.Type == null)
+                {
+                    return;
+                }
+                
+                predicateFieldType = instanceFieldPath.Value.Type;
+            }
+
+            var current = instanceFieldPath;
+            while (current?.Next != null)
+            {
+                current = current.Next;
+            }
+
+            if (!TryParsePredicate(current.Value.Type, predicate, out predicateValue))
+            {
+                return;
+            }
+            
             var numberOfMatches = 0;
+            
             foreach (var obj in objs)
             {
                 var matched = false;
-                if (!TryFindFieldValue(predicate.Field, obj, out var foundMap))
+                if (predicate.Field == "$this")
                 {
-                    continue;
-                }
-
-                var typeName = foundMap.instanceField.Type?.Name;
-                var fieldName = foundMap.instanceField.Name;
-                IComparable fieldValue = null;
-                IComparable predicateValue = null;
-                if (typeName == "System.Guid")
-                {
-                    if (Guid.TryParse(predicate.Value, out var parsed))
+                    if (!TryGetFieldValue(runtime, predicateFieldType, obj.Address, out fieldValue))
                     {
-                        fieldValue = foundMap.clrObject.ReadField<Guid>(fieldName);
-                        predicateValue = parsed;
-                    }
-                }
-                else if (typeName == "System.DateTime")
-                {
-                    if (DateTime.TryParse(predicate.Value, out var parsed))
-                    {
-                        fieldValue = foundMap.clrObject.ReadField<DateTime>(fieldName);
-                        predicateValue = parsed;
-                    }
-                }
-                else if (typeName == "System.DateTimeOffset")
-                {
-                    if (DateTimeOffset.TryParse(predicate.Value, out var parsed))
-                    {
-                        fieldValue = foundMap.clrObject.ReadField<DateTimeOffset>(fieldName);
-                        predicateValue = parsed;
+                        continue;
                     }
                 }
                 else
                 {
-                    switch (foundMap.instanceField.ElementType)
+                    if (instanceFieldPath == null)
                     {
-                        case ClrElementType.Int32:
-                            if (int.TryParse(predicate.Value, out var parsedPredicateValue))
-                            {
-                                fieldValue = foundMap.clrObject.ReadField<Int32>(fieldName);
-                                predicateValue = parsedPredicateValue;
-                            }
-                            break;
-                        case ClrElementType.String:
-                            fieldValue = foundMap.clrObject.ReadStringField(fieldName);
-                            predicateValue = predicate.Value;
-                            break;
-                        case ClrElementType.Class:
-                            if (Helper.TryParseAddress(predicate.Value, out var parsedAddress))
-                            {
-                                fieldValue = foundMap.clrObject.ReadObjectField(fieldName).Address;
-                                predicateValue = parsedAddress;
-                            }
-                            break;
+                        continue;
+                    }
+                    if (!TryGetFieldValueFromFieldPath(runtime, obj, instanceFieldPath, out fieldValue))
+                    {
+                        continue;
                     }
                 }
-                    
-                static int CompareObjects(object left, object right)
+
+                if (fieldValue == null)
                 {
-                    if (left is IComparable comparable)
-                    {
-                        return comparable.CompareTo(right);
-                    }
-                    throw new ArgumentException("The type does not implement IComparable", nameof(left));
+                    continue;
+                }
+
+                if (predicateValue == null)
+                {
+                    continue;
                 }
                     
                 switch (predicate.Operator)
                 {
                     case WhereOperator.GreaterThan:
-                        if (CompareObjects(fieldValue, predicateValue) > 0)
+                        if (fieldValue.CompareTo(predicateValue) > 0)
                         {
                             matched = true;
                         }
                         break;
                     case WhereOperator.GreaterThanOrEqual:
-                        if (CompareObjects(fieldValue, predicateValue) >= 0)
+                        if (fieldValue.CompareTo(predicateValue) >= 0)
                         {
                             matched = true;
                         }
                         break;
                     case WhereOperator.LessThan:
-                        if (CompareObjects(fieldValue, predicateValue) < 0)
+                        if (fieldValue.CompareTo(predicateValue) < 0)
                         {
                             matched = true;
                         }
                         break;
                     case WhereOperator.LessThanOrEqual:
-                        if (CompareObjects(fieldValue, predicateValue) <= 0)
+                        if (fieldValue.CompareTo(predicateValue) <= 0)
                         {
                             matched = true;
                         }
@@ -240,68 +486,63 @@ public class QueryCommand : DbgEngCommand
             }
             Console.WriteLine("Number of matches: {0}", numberOfMatches);
         }
-        
-        public void Run(ClrRuntime runtime, ulong methodTable, IReadOnlyList<string> fields)
+
+        public void RunSelect(ClrRuntime runtime, IReadOnlyList<ClrObject> objs, ClrType type,
+            IReadOnlyList<string> fields)
         {
-            var heap = runtime.Heap;
-            var objs = heap.EnumerateObjects().Where(o => o.Type?.MethodTable == methodTable);
+            var instanceFieldPaths = new List<ClrInstanceFieldPath>();
+
+            foreach (var field in fields)
+            {
+                if (TryParseFieldPathFromFieldExpression(field, type, out var instanceFieldPath))
+                {
+                    if (instanceFieldPath != null)
+                    {
+                        instanceFieldPaths.Add(instanceFieldPath);
+                    }
+                }
+            }
+            
             foreach (var obj in objs)
             {
                 Console.WriteLine("Address {0:x8}", obj.Address);
-                foreach (var field in fields)
+                foreach (var field in instanceFieldPaths)
                 {
-                    PrintField(field, obj);
+                    if (TryGetFieldValueFromFieldPath(runtime, obj, field, out var toPrint))
+                    {
+                        if (toPrint is ulong)
+                        {
+                            toPrint = $"{toPrint:x8}";
+                        }
+                        Console.WriteLine("  {0}: {1}", field.Value.Name, toPrint);
+                    }
                 }
             }
+        }
+
+        public void RunSelectForAddress(ClrRuntime runtime, ulong address, IReadOnlyList<string> fields)
+        {
+            var clrObject = runtime.Heap.GetObject(address);
+            if (!clrObject.IsValid || clrObject.IsNull || clrObject.Type == null)
+            {
+                return;
+            }
+            
+            RunSelect(runtime, [clrObject], clrObject.Type, fields);
         }
         
-        private static bool TryFindFieldValue(string field, ClrObject obj, out (ClrInstanceField instanceField, ClrObject clrObject) result)
+        public void RunSelect(ClrRuntime runtime, ulong methodTable, IReadOnlyList<string> fields)
         {
-            result = default;
-            ClrObject current = obj;
-            var splitFields = field.Split(".");
-            for (int i = 0; i < splitFields.Length; i++)
+            var objs = runtime.Heap.EnumerateObjects()
+                .Where(o => o.Type?.MethodTable == methodTable)
+                .ToList();
+            var type = runtime.Heap.GetTypeByMethodTable(methodTable);
+            if (type == null)
             {
-                var splitFieldObj = current.Type?.Fields.Where(f => f.Name == splitFields[i]).FirstOrDefault();
-                if (splitFieldObj != null)
-                {
-                    if (i < splitFields.Length - 1)
-                    {
-                        current = current.ReadObjectField(splitFields[i]);
-                    }
-                    else
-                    {
-                        result = (splitFieldObj, current);
-                        return true;
-                    }
-                }
+                return;
             }
-
-            return false;
-        }
-
-        private static void PrintField(string field, ClrObject obj)
-        {
-            if (TryFindFieldValue(field, obj, out var foundMap))
-            {
-                var typeName = foundMap.instanceField.Type?.Name;
-                var fieldName = foundMap.instanceField.Name;
-                object value = typeName switch
-                {
-                    "System.Guid" => foundMap.clrObject.ReadField<Guid>(fieldName),
-                    "System.DateTime" => foundMap.clrObject.ReadField<DateTime>(fieldName),
-                    "System.DateTimeOffset" => foundMap.clrObject.ReadField<DateTimeOffset>(fieldName),
-                    _ => foundMap.instanceField.ElementType switch
-                    {
-                        ClrElementType.Int32 => foundMap.clrObject.ReadField<int>(fieldName),
-                        ClrElementType.String => foundMap.clrObject.ReadStringField(fieldName),
-                        ClrElementType.Object or ClrElementType.Class => foundMap.clrObject.ReadObjectField(fieldName).Address.ToString("x8"),
-                        _ => "Unsupported field type"
-                    }
-                };
-
-                Console.WriteLine("  {0}: {1}", field, value);
-            }
+            
+            RunSelect(runtime, objs, type, fields);
         }
     }
 }
