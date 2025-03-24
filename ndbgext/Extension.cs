@@ -508,6 +508,30 @@ public static unsafe class Extension
         return 0;
     }
     
+    [UnmanagedCallersOnly(EntryPoint = "tsemaphore", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int tsemaphore(nint pUnknown, nint args)
+    {
+        return _tsemaphore(pUnknown, args);
+    }
+
+    private static readonly SemaphoreCommandRunner _semaphoreRunner = new();
+    private static int _tsemaphore(nint pUnknown, nint args)
+    {
+        try
+        {
+            SemaphoreCommand cmd = new(_semaphoreRunner, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(SemaphoreCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+    
     [UnmanagedCallersOnly(EntryPoint = "tquery", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int tquery(nint pUnknown, nint args)
     {
