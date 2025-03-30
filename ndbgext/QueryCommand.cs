@@ -227,6 +227,56 @@ public class QueryCommand : DbgEngCommand
             return false;
         }
         
+        private static bool TryParseFieldPathFromFieldExpression(ClrRuntime runtime, string field, ClrObject obj, out ClrInstanceFieldPath? head)
+        {
+            head = null;
+            ClrInstanceFieldPath? tail = null;
+            var splitFields = field.Split(".");
+            var current = obj.Type;
+            var currentObj = obj;
+            for (var i = 0; i < splitFields.Length; i++)
+            {
+                var localI = i;
+                var splitFieldObj = current?.Fields.FirstOrDefault(f => f.Name == splitFields[localI]);
+                if (splitFieldObj == null)
+                {
+                    return false;
+                }
+
+                if (head == null)
+                {
+                    head = new ClrInstanceFieldPath
+                    {
+                        Value = splitFieldObj
+                    };
+                    tail = head;
+                }
+                else
+                {
+                    tail.Next = new ClrInstanceFieldPath
+                    {
+                        Value = splitFieldObj
+                    };
+                    tail = tail.Next;
+                }
+
+                if (!TryGetAddress(runtime, currentObj, tail.Value, out var address))
+                {
+                    return false;
+                }
+
+                currentObj = runtime.Heap.GetObject(address);
+                current = currentObj.Type;
+
+                if (i >= splitFields.Length - 1)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        
         private static bool TryParseFieldPathFromFieldExpression(string field, ClrType type, out ClrInstanceFieldPath? head)
         {
             head = null;
@@ -298,47 +348,31 @@ public class QueryCommand : DbgEngCommand
             {
                 return;
             }
-
-            ClrType? predicateFieldType;
-            ClrInstanceFieldPath? instanceFieldPath = null;
-            if (predicate.Field == "$this")
-            {
-                predicateFieldType = type;
-            }
-            else
-            {
-                if (!TryParseFieldPathFromFieldExpression(predicate.Field, type, out instanceFieldPath))
-                {
-                    return;
-                }
-
-                if (instanceFieldPath == null || instanceFieldPath.Value.Type == null)
-                {
-                    return;
-                }
-                
-                predicateFieldType = instanceFieldPath.Value.Type;
-            }
-
-            var current = instanceFieldPath;
-            while (current?.Next != null)
-            {
-                current = current.Next;
-            }
-
-            if (!TryParsePredicate(current.Value.Type, predicate, out predicateValue))
-            {
-                return;
-            }
             
             var numberOfMatches = 0;
             
             foreach (var obj in objs)
             {
+                if (!TryParseFieldPathFromFieldExpression(runtime, predicate.Field, obj, out var instanceFieldPath))
+                {
+                    continue;
+                }
+                
+                var current = instanceFieldPath;
+                while (current?.Next != null)
+                {
+                    current = current.Next;
+                }
+                
+                if (!TryParsePredicate(current.Value.Type, predicate, out predicateValue))
+                {
+                    return;
+                }
+                
                 var matched = false;
                 if (predicate.Field == "$this")
                 {
-                    if (!TryGetFieldValue(runtime, predicateFieldType, obj.Address, out fieldValue))
+                    if (!TryGetFieldValue(runtime, obj.Type, obj.Address, out fieldValue))
                     {
                         continue;
                     }
@@ -421,31 +455,22 @@ public class QueryCommand : DbgEngCommand
         public void RunSelect(ClrRuntime runtime, IReadOnlyList<ClrObject> objs, ClrType type,
             IReadOnlyList<string> fields)
         {
-            var instanceFieldPaths = new List<ClrInstanceFieldPath>();
-
-            foreach (var field in fields)
-            {
-                if (TryParseFieldPathFromFieldExpression(field, type, out var instanceFieldPath))
-                {
-                    if (instanceFieldPath != null)
-                    {
-                        instanceFieldPaths.Add(instanceFieldPath);
-                    }
-                }
-            }
-            
             foreach (var obj in objs)
             {
                 Console.WriteLine("Address {0:x8}", obj.Address);
-                foreach (var field in instanceFieldPaths)
+                foreach (var field in fields)
                 {
-                    if (TryGetFieldValueFromFieldPath(runtime, obj, field, out var toPrint))
+                    if (TryParseFieldPathFromFieldExpression(runtime, field, obj, out var instanceFieldPath))
                     {
-                        if (toPrint is ulong)
+                        if (TryGetFieldValueFromFieldPath(runtime, obj, instanceFieldPath, out var toPrint))
                         {
-                            toPrint = $"{toPrint:x8}";
+                            if (toPrint is ulong)
+                            {
+                                toPrint = $"{toPrint:x8}";
+                            }
+                            Console.WriteLine("  {0}: {1}", field, toPrint);
                         }
-                        Console.WriteLine("  {0}: {1}", field.Value.Name, toPrint);
+                        
                     }
                 }
             }
