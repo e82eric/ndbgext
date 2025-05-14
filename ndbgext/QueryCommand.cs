@@ -16,7 +16,7 @@ public class QueryCommand : DbgEngCommand
     internal void Run(string args)
     {
         var argsSplit = args.Split([' '], 4);
-        if (argsSplit.Length >= 4 && (argsSplit[0] == "-mt" || argsSplit[0] == "-addr") && Helper.TryParseAddress(argsSplit[1], out var methodTableOrAddress))
+        if (argsSplit.Length >= 4 && (argsSplit[0] == "-mt" || argsSplit[0] == "-addr" || argsSplit[0] == "-array") && Helper.TryParseAddress(argsSplit[1], out var methodTableOrAddress))
         {
             if (argsSplit[2] == "select")
             {
@@ -31,6 +31,9 @@ public class QueryCommand : DbgEngCommand
                             break;
                         case "-addr":
                             _queryRunner.RunSelectForAddress(runtime, methodTableOrAddress, fields);
+                            break;
+                        case "-array":
+                            _queryRunner.RunSelectForArray(runtime, methodTableOrAddress, fields);
                             break;
                     }
                 }
@@ -65,6 +68,20 @@ public class QueryCommand : DbgEngCommand
     {
         private static readonly Dictionary<string, TypeHandlers> TypeNameMap = new()
         {
+            {
+                "System.Boolean", new TypeHandlers
+                {
+                    ParseFunc = s =>
+                    {
+                        var success = bool.TryParse(s, out var result);
+                        return (success, result);
+                    },
+                    ReadFunc = (runtime, address) =>
+                    {
+                        return runtime.DataTarget.DataReader.Read<Guid>(address);
+                    }
+                }
+            },
             {
                 "System.Guid", new TypeHandlers
                 {
@@ -475,7 +492,7 @@ public class QueryCommand : DbgEngCommand
                 }
             }
         }
-
+        
         public void RunSelectForAddress(ClrRuntime runtime, ulong address, IReadOnlyList<string> fields)
         {
             var clrObject = runtime.Heap.GetObject(address);
@@ -485,6 +502,24 @@ public class QueryCommand : DbgEngCommand
             }
             
             RunSelect(runtime, [clrObject], clrObject.Type, fields);
+        }
+
+        public void RunSelectForArray(ClrRuntime runtime, ulong address, IReadOnlyList<string> fields)
+        {
+            var clrObject = runtime.Heap.GetObject(address);
+            var array = clrObject.AsArray();
+            var items = new List<ClrObject>();
+            for (var i = 0; i < array.GetLength(0); i++)
+            {
+                var item = array.GetObjectValue(i);
+                items.Add(item);
+            }
+            if (!items.Any())
+            {
+                return;
+            }
+            
+            RunSelect(runtime, items, items.First().Type, fields);
         }
         
         public void RunSelect(ClrRuntime runtime, ulong methodTable, IReadOnlyList<string> fields)

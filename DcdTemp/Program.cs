@@ -21,6 +21,14 @@ dict.TryAdd(2, new ValClass
     SC1 = new SubClass1{SC2 = new SubClass2{G = Guid.NewGuid()}}
 });
 
+var ericArray = new[]
+{
+    new ValClass() { MyProp = "Test 1" },
+    new ValClass() { MyProp = "Test 2" },
+    new ValClass() { MyProp = "Test 3" },
+    new ValClass() { MyProp = "Test 4" },
+};
+
 var runner = new Runner();
 var sem = new SemaphoreSlim(1);
 
