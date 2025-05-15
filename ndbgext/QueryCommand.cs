@@ -329,6 +329,10 @@ public class QueryCommand : DbgEngCommand
 
                 currentObj = runtime.Heap.GetObject(address);
                 current = currentObj.Type;
+                if (current == null)
+                {
+                    current = tail.Value.Type;
+                }
 
                 if (i >= splitFields.Length - 1)
                 {
