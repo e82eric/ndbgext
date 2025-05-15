@@ -17,7 +17,8 @@ dict.TryAdd(1, new ValClass
     Sem = new SemaphoreSlim(2),
     Dt = DateTime.Parse("3/17/2025 10:52:04 PM"),
     Dto = DateTimeOffset.Parse("3/17/2025 10:52:04 PM"),
-    SC1 = new SubClass1{SC2 = new SubClass2{G = Guid.NewGuid()}}
+    SC1 = new SubClass1{SC2 = new SubClass2{G = Guid.NewGuid()}},
+    DtProp = DateTime.Now
 });
 dict.TryAdd(2, new ValClass
 {
@@ -25,7 +26,8 @@ dict.TryAdd(2, new ValClass
     MyGuidProp = Guid.NewGuid(),
     Sem = new SemaphoreSlim(3),
     Dt = DateTime.Now, Dto = DateTimeOffset.Now,
-    SC1 = new SubClass1{SC2 = new SubClass2{G = Guid.NewGuid()}}
+    SC1 = new SubClass1{SC2 = new SubClass2{G = Guid.NewGuid()}},
+    DtProp = DateTime.Parse("2025-01-05")
 });
 
 var ericArray = new[]
@@ -67,6 +69,7 @@ class ValClass
     public DateTime Dt { get; set; }
     public DateTimeOffset Dto { get; set; }
     public SubClass1 SC1 { get; init; }
+    public DateTime? DtProp { get; set; }
 }
 
 public class Runner

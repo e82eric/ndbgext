@@ -118,7 +118,7 @@ public class QueryCommand : DbgEngCommand
                     },
                     ReadFunc = (runtime, address) =>
                     {
-                        return runtime.DataTarget.DataReader.Read<Guid>(address);
+                        return runtime.DataTarget.DataReader.Read<Boolean>(address);
                     }
                 }
             },
@@ -219,6 +219,7 @@ public class QueryCommand : DbgEngCommand
             {
                 if (!ElementTypeMap.TryGetValue(type.ElementType, out handlers))
                 {
+                    Console.WriteLine("Cannot find handler for: {0}", type.Name);
                     return false;
                 }
             }
@@ -233,6 +234,7 @@ public class QueryCommand : DbgEngCommand
             result = null;
             if (type.Name == null)
             {
+                Console.WriteLine("Type Name was null {0}", address);
                 return false;
             }
 
@@ -240,6 +242,7 @@ public class QueryCommand : DbgEngCommand
             {
                 if (!ElementTypeMap.TryGetValue(type.ElementType, out handlers))
                 {
+                    Console.WriteLine("Unable to get field value for {0} {1} {2}", type.Name, type.ElementType, address);
                     return false;
                 }
             }
@@ -263,11 +266,13 @@ public class QueryCommand : DbgEngCommand
                 var instanceField = current.Value;
                 if (instanceField.Type == null)
                 {
+                    Console.WriteLine("InstanceField.Type is null {0}", fieldPath.Value.Name);
                     return false;
                 }
                 
                 if (!TryGetAddress(runtime, currentObject, instanceField, out var fieldAddress))
                 {
+                    Console.WriteLine("Unable to get field path address {0}", fieldPath.Value.Name);
                     return false;
                 }
 
@@ -553,7 +558,14 @@ public class QueryCommand : DbgEngCommand
                             }
                             Console.WriteLine("  {0}: {1}", field, toPrint);
                         }
-                        
+                        else
+                        {
+                            Console.WriteLine("Unable to get field value from field path {0}", field);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Unable to parse select field expression {0}", field);
                     }
                 }
             }
