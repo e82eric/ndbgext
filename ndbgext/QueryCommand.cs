@@ -15,6 +15,46 @@ public class QueryCommand : DbgEngCommand
 
     internal void Run(string args)
     {
+        var selectWhereExpression = @"^-(?<source>mt|addr|array)\s+(?<address>\w+)\s+select\s+(?<fields>[^,]+(?:\s*,\s*[^,]+)*)\s+where\s+(?<predicate>.*)$";
+        var selectWhereRegex = new Regex(selectWhereExpression, RegexOptions.IgnoreCase);
+        var selectWhereResult = selectWhereRegex.Match(args);
+
+        if (selectWhereResult.Success)
+        {
+            var sourceType = selectWhereResult.Groups["source"].Value;
+            var sourceAddress = selectWhereResult.Groups["address"].Value;
+            var fieldsArgs = selectWhereResult.Groups["fields"].Value;
+            var fields = fieldsArgs.Split(',').Select(s => s.Trim()).ToArray();
+            var predicateStr = selectWhereResult.Groups["predicate"].Value;
+
+            if (Helper.TryParseAddress(sourceAddress, out var address))
+            {
+                if (QueryExpressionParser.ParseWherePredicate(predicateStr, out var predicate) && predicate != null)
+                {
+                    foreach (var runtime in Runtimes)
+                    {
+                        List<ClrObject> whereResults = null;
+                        switch (sourceType)
+                        {
+                            case "mt":
+                                whereResults = _queryRunner.CollectObjectsWhereForMethodTable(runtime, address, predicate);
+                                break;
+                            case "array":
+                                whereResults = _queryRunner.CollectObjectsWhereForArray(runtime, address, predicate);
+                                break;
+                        }
+
+                        if (whereResults != null)
+                        {
+                            _queryRunner.RunSelect(runtime, whereResults, fields);
+                        }
+                    }
+                }
+            }
+
+            return;
+        }
+        
         var argsSplit = args.Split([' '], 4);
         if (argsSplit.Length >= 4 && (argsSplit[0] == "-mt" || argsSplit[0] == "-addr" || argsSplit[0] == "-array") && Helper.TryParseAddress(argsSplit[1], out var methodTableOrAddress))
         {
@@ -353,18 +393,12 @@ public class QueryCommand : DbgEngCommand
             result = fieldAddress;
             return true;
         }
-
-        public void RunWhere(ClrRuntime runtime, ulong methodTable, WherePredicate predicate)
+        
+        public List<ClrObject> CollectObjectsWhere(ClrRuntime runtime, IReadOnlyList<ClrObject> objs, WherePredicate predicate)
         {
+            var result = new List<ClrObject>();
             IComparable? fieldValue;
             IComparable? predicateValue;
-            var heap = runtime.Heap;
-            var objs = heap.EnumerateObjects().Where(o => o.Type?.MethodTable == methodTable);
-            var type = runtime.GetTypeByMethodTable(methodTable);
-            if (type == null)
-            {
-                return;
-            }
             
             var numberOfMatches = 0;
             
@@ -383,7 +417,7 @@ public class QueryCommand : DbgEngCommand
                 
                 if (!TryParsePredicate(current.Value.Type, predicate, out predicateValue))
                 {
-                    return;
+                    return result;
                 }
                 
                 var matched = false;
@@ -463,14 +497,46 @@ public class QueryCommand : DbgEngCommand
                 if (matched)
                 {
                     numberOfMatches++;
-                    Console.WriteLine("Address: {0:x8}", obj.Address);
+                    result.Add(obj);
                 }
             }
-            Console.WriteLine("Number of matches: {0}", numberOfMatches);
+
+            return result;
+        }
+        
+        public List<ClrObject> CollectObjectsWhereForMethodTable(ClrRuntime runtime, ulong methodTable, WherePredicate predicate)
+        {
+            var heap = runtime.Heap;
+            var objs = heap.EnumerateObjects().Where(o => o.Type?.MethodTable == methodTable).ToList();
+            return CollectObjectsWhere(runtime, objs, predicate);
+        }
+        
+        public List<ClrObject> CollectObjectsWhereForArray(ClrRuntime runtime, ulong address, WherePredicate predicate)
+        {
+            var heap = runtime.Heap;
+            var obj = heap.GetObject(address);
+            var array = obj.AsArray();
+            var items = new List<ClrObject>();
+            for (int i = 0; i < array.GetLength(0); i++)
+            {
+                var item = array.GetObjectValue(i);
+                items.Add(item);
+            }
+            return CollectObjectsWhere(runtime, items, predicate);
         }
 
-        public void RunSelect(ClrRuntime runtime, IReadOnlyList<ClrObject> objs, ClrType type,
-            IReadOnlyList<string> fields)
+        public void RunWhere(ClrRuntime runtime, ulong methodTable, WherePredicate predicate)
+        {
+            var items = CollectObjectsWhereForMethodTable(runtime, methodTable, predicate);
+            foreach (var item in items)
+            {
+                Console.WriteLine("Address: {0:x8}", item.Address);
+            }
+            
+            Console.WriteLine("Number of matches: {0}", items.Count);
+        }
+
+        public void RunSelect(ClrRuntime runtime, IReadOnlyList<ClrObject> objs, IReadOnlyList<string> fields)
         {
             foreach (var obj in objs)
             {
@@ -501,7 +567,7 @@ public class QueryCommand : DbgEngCommand
                 return;
             }
             
-            RunSelect(runtime, [clrObject], clrObject.Type, fields);
+            RunSelect(runtime, [clrObject], fields);
         }
 
         public void RunSelectForArray(ClrRuntime runtime, ulong address, IReadOnlyList<string> fields)
@@ -519,7 +585,7 @@ public class QueryCommand : DbgEngCommand
                 return;
             }
             
-            RunSelect(runtime, items, items.First().Type, fields);
+            RunSelect(runtime, items, fields);
         }
         
         public void RunSelect(ClrRuntime runtime, ulong methodTable, IReadOnlyList<string> fields)
@@ -533,7 +599,7 @@ public class QueryCommand : DbgEngCommand
                 return;
             }
             
-            RunSelect(runtime, objs, type, fields);
+            RunSelect(runtime, objs, fields);
         }
     }
 }
@@ -561,12 +627,19 @@ public class QueryExpressionParser
     private static readonly Dictionary<string, WhereOperator> Operators = new()
     {
         { " == ", WhereOperator.Equals },
+        { "==", WhereOperator.Equals },
         { " >= ", WhereOperator.GreaterThanOrEqual },
+        { ">=", WhereOperator.GreaterThanOrEqual },
         { " <= ", WhereOperator.LessThanOrEqual },
+        { "<=", WhereOperator.LessThanOrEqual },
         { " > ", WhereOperator.GreaterThan },
+        { ">", WhereOperator.GreaterThan },
         { " < ", WhereOperator.LessThan },
+        { "<", WhereOperator.LessThan },
         { " != ", WhereOperator.NotEquals },
-        { " =~ ", WhereOperator.Matches }
+        { "!=", WhereOperator.NotEquals },
+        { " =~ ", WhereOperator.Matches },
+        { "=~", WhereOperator.Matches }
     };
     
     public static bool ParseWherePredicate(string expression, out WherePredicate? result)
@@ -606,4 +679,3 @@ public class QueryExpressionParser
         return false;
     }
 }
-

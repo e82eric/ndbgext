@@ -1,6 +1,13 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
+
+var a = "!tquery -mt 00007ff9ec60ee58 select <MyProp>k__BackingField where <MyProp>k__BackingField == Test1";
+var a2 = "-mt 00007ff9ec611ca8 select <MyProp>k__BackingField,<MyGuidProp>k__BackingField where <MyProp>k__BackingField == Test1";
+var expression = @"^-(?<source>mt|addr|array)\s+(?<address>\w+)\s+select\s+(?<fields>[^,]+(?:\s*,\s*[^,]+)*)\s+where\s+(?<predicate>.*)$";
+var selectWhereRegex = new Regex(expression, RegexOptions.IgnoreCase);
+var selectWhereResult = selectWhereRegex.Match(a2);
 
 var dict = new ConcurrentDictionary<int, ValClass>();
 dict.TryAdd(1, new ValClass
