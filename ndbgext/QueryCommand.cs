@@ -388,7 +388,8 @@ public class QueryCommand : DbgEngCommand
         private static bool TryGetAddress(ClrRuntime runtime, ClrObject obj, ClrInstanceField field, out ulong result)
         {
             result = 0;
-            var fieldAddress = obj.Address + (ulong)(field.Offset + IntPtr.Size);
+            
+            var fieldAddress = obj.Type == null || obj.Type.IsValueType ? obj.Address + (ulong)field.Offset : obj.Address + (ulong)(field.Offset + IntPtr.Size);
             if (!field.IsValueType)
             {
                 if (!runtime.DataTarget.DataReader.ReadPointer(fieldAddress, out var fieldPtr))
