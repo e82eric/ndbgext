@@ -1,7 +1,10 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
+
+var _h = new Holder();
 
 var a = "!tquery -mt 00007ff9ec60ee58 select <MyProp>k__BackingField where <MyProp>k__BackingField == Test1";
 var a2 = "-mt 00007ff9ec611ca8 select <MyProp>k__BackingField,<MyGuidProp>k__BackingField where <MyProp>k__BackingField == Test1";
@@ -30,13 +33,18 @@ dict.TryAdd(2, new ValClass
     DtProp = DateTime.Parse("2025-01-05")
 });
 
-// var ericArray = new[]
-// {
-//     new ValClass() { MyProp = "Test 1" },
-//     new ValClass() { MyProp = "Test 2" },
-//     new ValClass() { MyProp = "Test 3" },
-//     new ValClass() { MyProp = "Test 4" },
-// };
+var ht = new Hashtable();
+ht.Add(1, "test1");
+ht.Add(2, "test2");
+ht.Add(3, "test3");
+
+var ericArray = new[]
+{
+    new ValClass() { MyProp = "Test 1" },
+    new ValClass() { MyProp = "Test 2" },
+    new ValClass() { MyProp = "Test 3" },
+    new ValClass() { MyProp = "Test 4" },
+};
 
 var runner = new Runner();
 var sem = new SemaphoreSlim(1);
@@ -79,4 +87,14 @@ public class Runner
     {
         await _sem.WaitAsync();
     }
+}
+enum MyEnum { Zero, One, Two }
+class Holder
+{
+    public object   BoxedInt  =  42;          // boxed
+    public int?     NullableI = 123;          // struct
+    public int      PlainI    =  99;          // inline
+    public double   D         = 1.23;         // double
+    public long     L         = 123456789L;   // Int64
+    public MyEnum   E         = MyEnum.Two;   // enum
 }
