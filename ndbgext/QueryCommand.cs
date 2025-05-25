@@ -55,12 +55,10 @@ public class QueryCommand : DbgEngCommand
         var fieldsResult = FieldsRx.Match(rest);
         var predicateResult = PredicateRx.Match(rest);
 
-        var predicate = predicateResult.Success
-                 ? QueryExpressionParser.ParseWherePredicate(
-                       predicateResult.Groups["predicate"].Value, out var p) ? p : null
-                 : null;
+        var predicates = predicateResult.Success ? QueryExpressionParser.ParseWherePredicate(
+                       predicateResult.Groups["predicate"].Value) : null;
 
-        if (!fieldsResult.Success && predicateResult.Success && predicate != null)
+        if (!fieldsResult.Success && predicateResult.Success && predicates != null)
         {
             foreach (var runtime in Runtimes)
             {
@@ -68,10 +66,10 @@ public class QueryCommand : DbgEngCommand
                 switch (sourceType)
                 {
                     case "mt":
-                        whereResults = _queryRunner.CollectObjectsWhereForMethodTable(runtime, address, predicate);
+                        whereResults = _queryRunner.CollectObjectsWhereForMethodTable(runtime, address, predicates);
                         break;
                     case "array":
-                        whereResults = _queryRunner.CollectObjectsWhereForArray(runtime, address, predicate);
+                        whereResults = _queryRunner.CollectObjectsWhereForArray(runtime, address, predicates);
                         break;
                 }
 
@@ -97,10 +95,10 @@ public class QueryCommand : DbgEngCommand
                     switch (sourceType)
                     {
                         case "mt":
-                            whereResults = _queryRunner.CollectObjectsWhereForMethodTable(runtime, address, predicate);
+                            whereResults = _queryRunner.CollectObjectsWhereForMethodTable(runtime, address, predicates);
                             break;
                         case "array":
-                            whereResults = _queryRunner.CollectObjectsWhereForArray(runtime, address, predicate);
+                            whereResults = _queryRunner.CollectObjectsWhereForArray(runtime, address, predicates);
                             break;
                     }
 
@@ -511,101 +509,93 @@ public class QueryCommand : DbgEngCommand
             return true;
         }
 
-        private List<IClrValue> CollectObjectsWhere(ClrRuntime runtime, IReadOnlyList<IClrValue> objs, WherePredicate predicate)
+        private List<IClrValue> CollectObjectsWhere(
+            ClrRuntime runtime,
+            IReadOnlyList<IClrValue> objs,
+            IReadOnlyList<WherePredicate> predicates)
         {
             var result = new List<IClrValue>();
 
             foreach (var obj in objs)
             {
-                var matched = false;
-                if (!TryParseFieldPathFromFieldExpression(runtime, predicate.Field, obj, out var tailInstanceFieldPath))
+                var matchesAll = true;
+
+                foreach (var predicate in predicates)
                 {
-                    continue;
-                }
-                if (tailInstanceFieldPath == null)
-                {
-                    continue;
+                    if (!TryParseFieldPathFromFieldExpression(runtime, predicate.Field, obj,
+                            out var tailInstanceFieldPath) ||
+                        tailInstanceFieldPath == null)
+                    {
+                        matchesAll = false;
+                        break;
+                    }
+
+                    var fieldValue = tailInstanceFieldPath.Result;
+                    var actualType = tailInstanceFieldPath.Type;
+
+                    if (fieldValue == null ||
+                        !TryParsePredicate(actualType, predicate, out var predicateValue) ||
+                        predicateValue == null)
+                    {
+                        matchesAll = false;
+                        break;
+                    }
+
+                    bool thisPredicateMatches;
+                    switch (predicate.Operator)
+                    {
+                        case WhereOperator.GreaterThan:
+                            thisPredicateMatches = fieldValue is { } c1 && c1.CompareTo(predicateValue) > 0;
+                            break;
+                        case WhereOperator.GreaterThanOrEqual:
+                            thisPredicateMatches = fieldValue is { } c2 && c2.CompareTo(predicateValue) >= 0;
+                            break;
+                        case WhereOperator.LessThan:
+                            thisPredicateMatches = fieldValue is { } c3 && c3.CompareTo(predicateValue) < 0;
+                            break;
+                        case WhereOperator.LessThanOrEqual:
+                            thisPredicateMatches = fieldValue is { } c4 && c4.CompareTo(predicateValue) <= 0;
+                            break;
+                        case WhereOperator.Equals:
+                            thisPredicateMatches = Equals(fieldValue, predicateValue);
+                            break;
+                        case WhereOperator.Matches when fieldValue is string s1:
+                            var rx = new Regex(s1);
+                            thisPredicateMatches = rx.IsMatch(s1);
+                            break;
+                        default:
+                            thisPredicateMatches = false;
+                            break;
+                    }
+
+                    if (!thisPredicateMatches)
+                    {
+                        matchesAll = false;
+                        break;
+                    }
                 }
 
-                var fieldValue = tailInstanceFieldPath.Result;
-                var actualType = tailInstanceFieldPath.Type;
-
-                if (fieldValue == null)
-                {
-                    continue;
-                }
-
-                if (!TryParsePredicate(actualType, predicate, out var predicateValue))
-                {
-                    return result;
-                }
-
-                if (predicateValue == null)
-                {
-                    continue;
-                }
-                    
-                switch (predicate.Operator)
-                {
-                    case WhereOperator.GreaterThan:
-                        if (fieldValue.CompareTo(predicateValue) > 0)
-                        {
-                            matched = true;
-                        }
-                        break;
-                    case WhereOperator.GreaterThanOrEqual:
-                        if (fieldValue.CompareTo(predicateValue) >= 0)
-                        {
-                            matched = true;
-                        }
-                        break;
-                    case WhereOperator.LessThan:
-                        if (fieldValue.CompareTo(predicateValue) < 0)
-                        {
-                            matched = true;
-                        }
-                        break;
-                    case WhereOperator.LessThanOrEqual:
-                        if (fieldValue.CompareTo(predicateValue) <= 0)
-                        {
-                            matched = true;
-                        }
-                        break;
-                    case WhereOperator.Equals:
-                        if (Equals(fieldValue, predicateValue))
-                        {
-                            matched = true;
-                        }
-                        break;
-                    case WhereOperator.Matches:
-                        if (fieldValue is string && predicateValue is string)
-                        {
-                            var regex = new Regex((string)predicateValue);
-                            if(regex.IsMatch((string)fieldValue))
-                            {
-                                matched = true;
-                            }
-                        }
-                        break;
-                }
-                    
-                if (matched)
-                {
+                if (matchesAll)
                     result.Add(obj);
-                }
             }
 
             return result;
         }
         
-        public List<IClrValue> CollectObjectsWhereForMethodTable(ClrRuntime runtime, ulong methodTable, WherePredicate predicate)
+        public List<IClrValue> CollectObjectsWhereForMethodTable(
+            ClrRuntime runtime,
+            ulong methodTable,
+            IReadOnlyList<WherePredicate> predicate)
         {
             var heap = runtime.Heap;
             var objs = heap.EnumerateObjects().Where(o => o.Type?.MethodTable == methodTable).Cast<IClrValue>().ToList();
             return CollectObjectsWhere(runtime, objs, predicate);
         }
         
-        public List<IClrValue> CollectObjectsWhereForArray(ClrRuntime runtime, ulong address, WherePredicate predicate)
+        public List<IClrValue> CollectObjectsWhereForArray(
+            ClrRuntime runtime,
+            ulong address,
+            IReadOnlyList<WherePredicate> predicate)
         {
             var heap = runtime.Heap;
             var obj = heap.GetObject(address);
@@ -727,55 +717,69 @@ public class QueryExpressionParser
     private static readonly Dictionary<string, WhereOperator> Operators = new()
     {
         { " == ", WhereOperator.Equals },
-        { "==", WhereOperator.Equals },
         { " >= ", WhereOperator.GreaterThanOrEqual },
-        { ">=", WhereOperator.GreaterThanOrEqual },
         { " <= ", WhereOperator.LessThanOrEqual },
-        { "<=", WhereOperator.LessThanOrEqual },
         { " > ", WhereOperator.GreaterThan },
-        { ">", WhereOperator.GreaterThan },
         { " < ", WhereOperator.LessThan },
-        { "<", WhereOperator.LessThan },
         { " != ", WhereOperator.NotEquals },
-        { "!=", WhereOperator.NotEquals },
         { " =~ ", WhereOperator.Matches },
-        { "=~", WhereOperator.Matches }
     };
     
-    public static bool ParseWherePredicate(string expression, out WherePredicate? result)
+    private static readonly Regex AndSplitter = new(
+        @"\band\b(?=(?:[^']*'(?:[^'\\]|\\.|'')*')*[^']*$)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    public static IReadOnlyList<WherePredicate> ParseWherePredicate(string expression)
     {
-        result = null;
-        var operatorIndex = -1;
-        var opStrLen = -1;
-        WhereOperator? op = null;
+        var result = new List<WherePredicate>();
 
-        foreach (var opString in Operators.Keys)
+        var predicateStrs = AndSplitter
+            .Split(expression)
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 0)
+            .ToArray();
+
+        foreach (var predicateStr in predicateStrs)
         {
-            int index = expression.IndexOf(opString, StringComparison.Ordinal);
-            if (index >= 0)
+            int  operatorIndex = -1;
+            int  opStrLen      = -1;
+            WhereOperator? op  = null;
+
+            foreach (var opString in Operators.Keys)
             {
-                operatorIndex = index;
-                op = Operators[opString];
-                opStrLen = opString.Length;
-                break;
-            }            
+                var idx = predicateStr.IndexOf(opString, StringComparison.Ordinal);
+                if (idx >= 0)
+                {
+                    operatorIndex = idx;
+                    op = Operators[opString];
+                    opStrLen = opString.Length;
+                    break;
+                }
+            }
+
+            if (op is not null)
+            {
+                var field = predicateStr[..operatorIndex].Trim();
+                var raw = predicateStr[(operatorIndex + opStrLen)..].Trim();
+
+                if (raw.Length >= 2 && raw[0] == '\'' && raw[^1] == '\'')
+                {
+                    var value = raw[1..^1].Replace("''", "'").Replace("\\'", "'");
+
+                    result.Add(new WherePredicate
+                    {
+                        Field = field,
+                        Operator = op.Value,
+                        Value = value
+                    });
+                }
+                else
+                {
+                    throw new FormatException($"Value \"{raw}\" must be in single quotes.");
+                }
+            }
         }
 
-        if (op != null)
-        {
-            var field = expression.Substring(0, operatorIndex).Trim();
-            var value = expression.Substring(
-                operatorIndex + opStrLen,
-                expression.Length - operatorIndex - opStrLen).Trim();
-            result = new WherePredicate()
-            {
-                Field = field,
-                Operator = op.Value,
-                Value = value
-            };
-            return true;
-        }
-        
-        return false;
+        return result;
     }
 }

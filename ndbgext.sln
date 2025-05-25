@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ndbgext", "ndbgext\ndbgext.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DcdTemp", "DcdTemp\DcdTemp.csproj", "{FAA61F25-4CEE-4D71-B68C-431BA607B55C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ndbgext.tests", "ndbgext.tests\ndbgext.tests.csproj", "{3872B9D8-FD98-468A-AFAE-2949C7F32D07}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{FAA61F25-4CEE-4D71-B68C-431BA607B55C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FAA61F25-4CEE-4D71-B68C-431BA607B55C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FAA61F25-4CEE-4D71-B68C-431BA607B55C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3872B9D8-FD98-468A-AFAE-2949C7F32D07}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3872B9D8-FD98-468A-AFAE-2949C7F32D07}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3872B9D8-FD98-468A-AFAE-2949C7F32D07}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3872B9D8-FD98-468A-AFAE-2949C7F32D07}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
