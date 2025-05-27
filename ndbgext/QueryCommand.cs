@@ -142,6 +142,7 @@ public class QueryCommand : DbgEngCommand
 
     private class ClrInstanceFieldPath
     {
+        public string FieldName { get; set; }
         public required IClrType Type { get; init; }
         public IComparable? Result { get; init; }
     }
@@ -420,66 +421,148 @@ public class QueryCommand : DbgEngCommand
             Log("Unable to get field value for {0} {1} {2}", resultType.Name, resultType.ElementType, address);
             return false;
         }
-
-        private static bool TryParseFieldPathFromFieldExpression(ClrRuntime runtime, string field, IClrValue obj, out ClrInstanceFieldPath? tail)
+        
+        private static bool TryParseFieldPathFromFieldExpression(
+            ClrRuntime runtime,
+            string field,
+            IClrValue obj,
+            out IReadOnlyList<ClrInstanceFieldPath>? tail)
         {
             tail = null;
-            if (field == "$this")
+
+            if (field == "*")
             {
-                if (TryGetFieldValue(runtime, obj.Address, obj.Type, out var result))
-                {
-                    tail = new ClrInstanceFieldPath
-                    {
-                        Type = obj.Type,
-                        Result = result
-                    };
-                }
+                var list = GetFieldsValuesForStar(runtime, obj.Type, obj, []);
+                tail = list;
                 return true;
             }
-            
-            var splitFields = field.Split(".");
-            var current = obj.Type;
-            var currentObj = obj;
-            for (var i = 0; i < splitFields.Length; i++)
-            {
-                var localI = i;
-                var splitFieldObj = current?.Fields.FirstOrDefault(f => f.Name == splitFields[localI]);
-                if (splitFieldObj == null)
-                {
-                    return false;
-                }
 
-                if (!TryGetAddress(runtime, currentObj, splitFieldObj, out var address))
+            if (field == "$this")
+            {
+                if (obj.Type == null)
                 {
                     return false;
                 }
                 
-                if (splitFieldObj is { IsValueType: true, Name: not null })
+                if (TryGetFieldValue(runtime, obj.Address, obj.Type, out var result))
                 {
-                    current = splitFieldObj.Type;
-                    currentObj = currentObj.ReadValueTypeField(splitFieldObj.Name);
+                    tail = new[]
+                    {
+                        new ClrInstanceFieldPath
+                        {
+                            Type   = obj.Type,
+                            Result = result
+                        }
+                    };
+                }
+                return true;
+            }
+
+            var splitFields = field.Split('.');
+            var current     = obj.Type;
+            var currentObj  = obj;
+
+            for (var i = 0; i < splitFields.Length; i++)
+            {
+                var segment = splitFields[i];
+
+                if (segment == "*" && i == splitFields.Length - 1)
+                {
+                    var list = GetFieldsValuesForStar(runtime, current, currentObj, splitFields[..^1]);
+                    tail = list;
+                    return true;
+                }
+
+                var fld = current?.Fields.FirstOrDefault(f => f.Name == segment);
+                if (fld == null)
+                {
+                    return false;
+                }
+
+                if (!TryGetAddress(runtime, currentObj, fld, out var nextAddr))
+                {
+                    return false;
+                }
+
+                if (fld.IsValueType)
+                {
+                    if (fld.Name == null)
+                    {
+                        return false;
+                    }
+                    current = fld.Type;
+                    currentObj = currentObj.ReadValueTypeField(fld.Name);
                 }
                 else
                 {
-                    currentObj = runtime.Heap.GetObject(address);
-                    current = runtime.Heap.GetObjectType(address);
+                    currentObj = runtime.Heap.GetObject(nextAddr);
+                    current = runtime.Heap.GetObjectType(nextAddr);
                 }
 
                 if (current == null)
                 {
                     return false;
                 }
-                
-                if (i >= splitFields.Length - 1)
+
+                if (i == splitFields.Length - 1)
                 {
-                    if (TryGetFieldValue(runtime, address, current, out var result))
+                    if (TryGetFieldValue(runtime, nextAddr, current, out var result))
                     {
-                        tail = new ClrInstanceFieldPath
-                        {
-                            Type = current,
-                            Result = result
-                        };
+                        tail =
+                        [
+                            new ClrInstanceFieldPath
+                            {
+                                FieldName = fld.Name,
+                                Type = current,
+                                Result = result
+                            }
+                        ];
                     }
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static List<ClrInstanceFieldPath> GetFieldsValuesForStar(ClrRuntime runtime, IClrType? current, IClrValue currentObj, IReadOnlyList<string> fieldPrefix)
+        {
+            var list = new List<ClrInstanceFieldPath>();
+
+            foreach (var f in current.Fields)
+            {
+                if (!TryGetAddress(runtime, currentObj, f, out var addr))
+                {
+                    continue;
+                }
+
+                IClrType? actualType = runtime.Heap.GetObjectType(addr);
+                actualType = actualType != null ? actualType : f.Type;
+                if (actualType != null)
+                {
+                    if (TryGetFieldValue(runtime, addr, actualType, out var value))
+                    {
+                        list.Add(new ClrInstanceFieldPath
+                        {
+                            FieldName = string.Join(".", fieldPrefix.Append(f.Name)),
+                            Type      = f.Type,
+                            Result    = value
+                        });
+                    }
+                }
+            }
+
+            return list;
+        }
+
+        private static bool TryParseFieldPathFromFieldExpression(ClrRuntime runtime, string field, IClrValue obj, out ClrInstanceFieldPath? tail)
+        {
+            tail = null;
+            if (TryParseFieldPathFromFieldExpression(runtime, field, obj, out IReadOnlyList<ClrInstanceFieldPath>? fields))
+            {
+                if (fields != null && fields.Count == 1)
+                {
+                    tail = fields.Single();
                     return true;
                 }
             }
@@ -514,16 +597,16 @@ public class QueryCommand : DbgEngCommand
             IReadOnlyList<IClrValue> objs,
             IReadOnlyList<WherePredicate> predicates)
         {
-            var result = new List<IClrValue>();
+            List<IClrValue> result = new List<IClrValue>();
 
-            foreach (var obj in objs)
+            foreach (IClrValue obj in objs)
             {
-                var matchesAll = true;
+                bool matchesAll = true;
 
-                foreach (var predicate in predicates)
+                foreach (WherePredicate predicate in predicates)
                 {
                     if (!TryParseFieldPathFromFieldExpression(runtime, predicate.Field, obj,
-                            out var tailInstanceFieldPath) ||
+                            out ClrInstanceFieldPath? tailInstanceFieldPath) ||
                         tailInstanceFieldPath == null)
                     {
                         matchesAll = false;
@@ -534,7 +617,7 @@ public class QueryCommand : DbgEngCommand
                     var actualType = tailInstanceFieldPath.Type;
 
                     if (fieldValue == null ||
-                        !TryParsePredicate(actualType, predicate, out var predicateValue) ||
+                        !TryParsePredicate(actualType, predicate, out IComparable? predicateValue) ||
                         predicateValue == null)
                     {
                         matchesAll = false;
@@ -560,7 +643,7 @@ public class QueryCommand : DbgEngCommand
                             thisPredicateMatches = Equals(fieldValue, predicateValue);
                             break;
                         case WhereOperator.Matches when fieldValue is string s1:
-                            var rx = new Regex(s1);
+                            Regex rx = new Regex(s1);
                             thisPredicateMatches = rx.IsMatch(s1);
                             break;
                         default:
@@ -624,14 +707,17 @@ public class QueryCommand : DbgEngCommand
                 Console.WriteLine("Address {0:x8}", obj.Address);
                 foreach (var field in fields)
                 {
-                    if (TryParseFieldPathFromFieldExpression(runtime, field, obj, out var tailInstanceFieldPath))
+                    if (TryParseFieldPathFromFieldExpression(runtime, field, obj, out IReadOnlyList<ClrInstanceFieldPath> tailInstanceFieldPaths))
                     {
-                        var toPrint = tailInstanceFieldPath.Result;
-                        if (toPrint is ulong)
+                        foreach (var tailInstanceFieldPath in tailInstanceFieldPaths)
                         {
-                            toPrint = $"{toPrint:x8}";
+                            var toPrint = tailInstanceFieldPath.Result;
+                            if (toPrint is ulong)
+                            {
+                                toPrint = $"{toPrint:x8}";
+                            }
+                            Console.WriteLine("  {0}: {1}", tailInstanceFieldPath.FieldName, toPrint);
                         }
-                        Console.WriteLine("  {0}: {1}", field, toPrint);
                     }
                     else
                     {
