@@ -1002,7 +1002,7 @@ public sealed class NetCoreDumpAsyncCommand
                                     WriteAddress(awaiter.Address, asyncObject: false);
                                     Write(" ");
                                     WriteMethodTable(awaiter.Type.MethodTable, asyncObject: false);
-                                    Write(awaiter.Type.Name);
+                                    Write(awaiter.Type?.Name ?? string.Empty);
                                     WriteLine(" >>");
                                     return true;
                                 }
@@ -1036,8 +1036,9 @@ public sealed class NetCoreDumpAsyncCommand
                 while (stack.Count > 0)
                 {
                     (AsyncObject frame, depth) = stack.Pop();
-
-                    sb.Append($"{frame.StateMachine.Type.MethodTable:x8} {frame.NativeCode:x8}".PadRight(25));
+                    
+                    var mt = frame.StateMachine?.Type?.MethodTable;
+                    sb.Append($"{mt:x8} {frame.NativeCode:x8}".PadRight(25));
                     sb.Append($" {(frame.IsStateMachine ? $"{frame.AwaitState}" : $"{DescribeTaskFlags(frame.TaskStateFlags)}"), 5}");
                     sb.Append($"{Tabs(depth)}");
                     //WriteAddress(frame.Object.Address, asyncObject: true);
@@ -1054,14 +1055,15 @@ public sealed class NetCoreDumpAsyncCommand
 
                     foreach (ClrObject continuation in frame.Continuations)
                     {
-                        if (objects.TryGetValue(continuation, out AsyncObject asyncContinuation))
+                        if (objects.TryGetValue(continuation, out AsyncObject? asyncContinuation))
                         {
                             stack.Push((asyncContinuation, depth + 1));
                         }
                         else
                         {
                             string state = TryGetTaskStateFlags(continuation, out int flags) ? DescribeTaskFlags(flags) : "";
-                            sb.Append($"{frame.StateMachine.Type.MethodTable:x8} {frame.NativeCode:x8}".PadRight(25));
+                            var contMt = continuation.Type?.MethodTable;
+                            sb.Append($"{contMt:x8} {frame.NativeCode:x8}".PadRight(25));
                             sb.Append($" {state, 5}");
                             sb.Append($"{Tabs(depth + 1)}");
                             //WriteAddress(continuation.Address, asyncObject: true);
