@@ -5,18 +5,6 @@ namespace ndbgext;
 
 public static class Helper
 {
-    static readonly Dictionary<ClrElementType, Func<ClrObject, string, string>> _objectTypeFunctions = new Dictionary<ClrElementType, Func<ClrObject, string, string>>
-    {
-        {ClrElementType.Int16, (type, fieldName) => type.ReadField<Int16>(fieldName).ToString() },
-        {ClrElementType.Int32, (type, fieldName) => type.ReadField<Int32>(fieldName).ToString() },
-        {ClrElementType.Int64, (type, fieldName) => type.ReadField<Int64>(fieldName).ToString() },
-        {ClrElementType.UInt16, (type, fieldName) => type.ReadField<UInt16>(fieldName).ToString() },
-        {ClrElementType.UInt32, (type, fieldName) => type.ReadField<UInt32>(fieldName).ToString() },
-        {ClrElementType.UInt64, (type, fieldName) => type.ReadField<UInt64>(fieldName).ToString() },
-        {ClrElementType.Boolean, (type, fieldName) => type.ReadField<Boolean>(fieldName).ToString() },
-        {ClrElementType.Double, (type, fieldName) => type.ReadField<Double>(fieldName).ToString() },
-    };
-
     public static bool IsNetCore(ClrRuntime runtime)
     {
         foreach (ClrModule module in runtime.EnumerateModules())
@@ -50,7 +38,7 @@ public static class Helper
             }
         }
 
-        ClrObject target = default(ClrObject);
+        ClrObject target;
         if (!callback.TryReadObjectField("_target", out target))
         {
             result = "[no callback target]";
@@ -82,13 +70,13 @@ public static class Helper
             // method is implemented by an class inherited from targetType
             // ... or a simple delegate indirection to a static/instance method
             else if(target.Type.Name == "System.Threading.WaitCallback"
-                || target.Type.Name.StartsWith("System.Action<"))
+                || target.Type != null && target.Type.Name != null && target.Type.Name.StartsWith("System.Action<"))
             {
                 result = $"{method.Type.Name}.{method.Name}";
             }
             else
             {
-                result = $"{target.Type.Name}.{method.Type.Name}.{method.Name}";
+                result = $"{target.Type?.Name}.{method.Type.Name}.{method.Name}";
             }
         }
 
@@ -114,26 +102,6 @@ public static class Helper
         }
     
         return $"{displayValue:N2} {units[unitIndex]}";
-    }
-
-    public static void PrintHeapItems(IReadOnlyList<HeapItem> items)
-    {
-        var byType = items.GroupBy(i => i.TypeName);
-            
-        var statsByType = byType.Select(group => new
-        {
-            TypeName = group.Key,
-            group.FirstOrDefault()?.MethodTable,
-            Count = group.Count(),
-            Size = group.Sum(g => (float)g.Size)
-        }).OrderBy(s => s.Size);
-            
-        foreach (var typeStat in statsByType)
-        {
-            Console.WriteLine("{0:X} {1} {2:N0} {3}", typeStat.MethodTable, Helper.FormatBytes(typeStat.Size), typeStat.Count, typeStat.TypeName);
-        }
-
-        Console.WriteLine("Total Objects: {0:N0}, Total Size: {1}", items.Count, Helper.FormatBytes(items.Sum(i => (float)i.Size)));
     }
 
     public static bool TryParseAddress(string value, out ulong result)

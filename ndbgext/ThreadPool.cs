@@ -1,7 +1,5 @@
 ﻿using DbgEngExtension;
 using Microsoft.Diagnostics.Runtime;
-using Microsoft.Diagnostics.Runtime.AbstractDac;
-using Microsoft.Diagnostics.Runtime.DacInterface;
 
 namespace ndbgext;
 
@@ -50,6 +48,12 @@ public class ThreadPool
         ClrObject threadPool = default(ClrObject);
         foreach (var heapObj in heap.EnumerateObjects())
         {
+            if (heapObj.Type == null)
+            {
+                //TODO log warning
+                continue;
+            }
+
             if (heapObj.Type.Name == "System.Threading.PortableThreadPool")
             {
                 threadPool = heapObj;
@@ -79,7 +83,7 @@ public class ThreadPool
         }
         else
         {
-            if (!threadPool.IsNull)
+            if (!threadPool.IsNull && threadPool.Type != null)
             {
                 Console.WriteLine(threadPool.Type.Name);
                 Console.WriteLine("Address: {0:X}", threadPool.Address);
@@ -89,8 +93,8 @@ public class ThreadPool
                 Console.WriteLine("Cpu Utilization: {0}", cpuUtilization);
                 Console.WriteLine("MinThreads: {0}", minThreads);
                 Console.WriteLine("MaxThreads: {0}", maxThreads);
-                var _separated = threadPool.ReadValueTypeField("_separated");
-                var counts = _separated.ReadValueTypeField("counts");
+                var separated = threadPool.ReadValueTypeField("_separated");
+                var counts = separated.ReadValueTypeField("counts");
                 var data = counts.ReadField<Int64>("_data");
                 var running = (short)(data >> 0);
                 var existingThreads = (short)(data >> 16);
@@ -118,6 +122,11 @@ public class ThreadPool
         ClrObject threadPoolWorkQueue = default(ClrObject);
         foreach (var obj in heap.EnumerateObjects())
         {
+            if (obj.Type == null)
+            {
+                continue;
+            }
+
             if (obj.Type.Name == "System.Threading.ThreadPoolWorkQueue")
             {
                 threadPoolWorkQueue = heap.GetObject(obj);
@@ -139,9 +148,9 @@ public class ThreadPool
     {
         var heap = runtime.Heap;
         ClrObject threadPoolWorkQueue = GetThreadPoolWorkQueue(heap);
-        Dictionary<string, WorkInfo> _tasks = new Dictionary<string, WorkInfo>();
+        Dictionary<string, WorkInfo> tasks = new Dictionary<string, WorkInfo>();
 
-        if (!threadPoolWorkQueue.IsNull)
+        if (!threadPoolWorkQueue.IsNull && threadPoolWorkQueue.Type != null)
         {
             Console.WriteLine("{0} {1:X}", threadPoolWorkQueue.Type.Name, threadPoolWorkQueue.Address);
 
@@ -152,7 +161,7 @@ public class ThreadPool
             foreach (var result in results)
             {
                 WriteDetail(statsOnly, "{0:X} {1} {2}", result.Address, result.Type, result.MethodName);
-                UpdateStats(_tasks, result.Type.ToString(), ref ctr);
+                UpdateStats(tasks, result.Type.ToString(), ref ctr);
             }
 
             var countByMethod = results
@@ -169,8 +178,8 @@ public class ThreadPool
 
             Console.WriteLine();
             Console.WriteLine("total stats________________________________");
-            _tasks.OrderBy(t => t.Value.Count);
-            foreach (var task in _tasks)
+            var ordered = tasks.OrderBy(t => t.Value.Count);
+            foreach (var task in ordered)
             {
                 Console.WriteLine("{0}: {1}", task.Key, task.Value.Count);
             }
@@ -193,7 +202,10 @@ public class ThreadPool
         {
             var itemObj = runtime.Heap.GetObject(item.Address);
             var threadPoolItem = GetThreadPoolItem(runtime, itemObj);
-            results.Add(threadPoolItem);
+            if (threadPoolItem != null)
+            {
+                results.Add(threadPoolItem);
+            }
         }
 
         return results;
@@ -202,7 +214,6 @@ public class ThreadPool
     IReadOnlyList<ThreadPoolItem> GetThreadPoolItemsFramework(ClrRuntime runtime, ClrObject threadPoolWorkQueue)
     {
         var results = new List<ThreadPoolItem>();
-        Dictionary<string, WorkInfo> _tasks = new Dictionary<string, WorkInfo>();
         var current = threadPoolWorkQueue.ReadObjectField("queueTail");
         while (!current.IsNull && current.IsValid)
         {
@@ -213,7 +224,10 @@ public class ThreadPool
                 if (!node.IsNull && node.IsValid)
                 {
                     var threadPoolItem = GetThreadPoolItem(runtime, node);
-                    results.Add(threadPoolItem);
+                    if (threadPoolItem != null)
+                    {
+                        results.Add(threadPoolItem);
+                    }
                 }
             }
 
@@ -232,7 +246,6 @@ public class ThreadPool
         {
             wi = new WorkInfo
             {
-                Name = statName,
                 Count = 0
             };
             workInfos[statName] = wi;
@@ -245,13 +258,18 @@ public class ThreadPool
         wi.Count++;
     }
 
-    private ThreadPoolItem GetThreadPoolItem(ClrRuntime runtime, ClrObject itemObj)
+    private ThreadPoolItem? GetThreadPoolItem(ClrRuntime runtime, ClrObject itemObj)
     {
-        ClrObject callback = default(ClrObject);
+        ClrObject callback;
         var result = new ThreadPoolItem
         {
             Address = itemObj.Address
         };
+
+        if (itemObj.Type == null)
+        {
+            return null;
+        }
 
         if (itemObj.Type.Name == "System.Threading.Tasks.Task")
         {
@@ -276,7 +294,7 @@ public class ThreadPool
             }
         }
 
-        ClrObject target = default(ClrObject);
+        ClrObject target;
         if (!callback.TryReadObjectField("_target", out target))
         {
             result.MethodName = "[no callback target]";
@@ -300,21 +318,25 @@ public class ThreadPool
 
         if (method != null)
         {
+            var targetTypeName = target.Type?.Name ?? "<unknown>";
+            var methodTypeName = method.Type.Name;
+            var methodName     = method.Name ?? "<unknown>";
+            
             // anonymous method
-            if (method.Type.Name == target.Type.Name)
+            if (methodTypeName == targetTypeName)
             {
-                result.MethodName = $"{target.Type.Name}.{method.Name}";
+                result.MethodName = $"{targetTypeName}.{method.Name}";
             }
             // method is implemented by an class inherited from targetType
             // ... or a simple delegate indirection to a static/instance method
-            else if(target.Type.Name == "System.Threading.WaitCallback"
-                || target.Type.Name.StartsWith("System.Action<"))
+            else if(targetTypeName == "System.Threading.WaitCallback"
+                || targetTypeName.StartsWith("System.Action<"))
             {
-                result.MethodName = $"{method.Type.Name}.{method.Name}";
+                result.MethodName = $"{methodTypeName}.{methodName}";
             }
             else
             {
-                result.MethodName = $"{target.Type.Name}.{method.Type.Name}.{method.Name}";
+                result.MethodName = $"{targetTypeName}.{methodTypeName}.{methodName}";
             }
         }
 
@@ -332,10 +354,9 @@ class ThreadPoolItem
 {
     public ThreadRoot Type { get; set; }
     public ulong Address { get; set; }
-    public string MethodName { get; set; }
+    public string? MethodName { get; set; }
 }
 class WorkInfo
 {
-    public string Name { get; set; }
     public int Count { get; set; }
 }

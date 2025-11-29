@@ -35,9 +35,9 @@ public class Tasks
         var result = new List<TasksItem>();
         foreach (var heapObject in heap.EnumerateObjects())
         {
-            if (heapObject.Type.Name.Contains("System.Threading.Tasks.Task"))
+            if (heapObject.Type != null && heapObject.Type.Name != null && heapObject.Type.Name.Contains("System.Threading.Tasks.Task"))
             {
-                if (TaskHelper.TryGetTaskItem(runtime, heapObject, out var taskItem) && taskItem != null)
+                if (TaskHelper.TryGetTaskItem(runtime, heapObject, out var taskItem))
                 {
                     result.Add(taskItem);
                 }
@@ -89,9 +89,9 @@ public class Tasks
 public class TasksItem
 {
     public ulong Address { get; set; }
-    public string TaskName { get; set; }
-    public string TaskState { get; set; }
-    public string Method { get; set; }
+    public required string TaskName { get; set; }
+    public required string TaskState { get; set; }
+    public required string Method { get; set; }
     public string? ContinuationStateMachine { get; set; }
     public string? StateMachine { get; set; }
 }

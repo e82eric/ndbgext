@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using ICSharpCode.Decompiler;
@@ -31,7 +32,7 @@ public class PeFileCache
         return _peFileCache.Count;
     }
     
-    public bool TryGetByNameAndFrameworkId(string fullName, string targetFrameworkId, out PEFile peFile)
+    public bool TryGetByNameAndFrameworkId(string fullName, string targetFrameworkId, [NotNullWhen(true)] out PEFile? peFile)
     {
         var uniqueness = fullName + '|' + targetFrameworkId;
         if (_peFileCache.TryGetValue(uniqueness, out peFile))
@@ -42,7 +43,7 @@ public class PeFileCache
         return false;
     }
         
-    public bool TryGetFirstMatchByName(string fullName, out PEFile peFile)
+    public bool TryGetFirstMatchByName(string fullName, [NotNullWhen(true)] out PEFile? peFile)
     {
         peFile = null;
         var firstFulNameMatch = _peFileCache.Keys.FirstOrDefault(k => k.StartsWith(fullName));
@@ -58,7 +59,7 @@ public class PeFileCache
         return false;
     }
         
-    public bool TryOpen(string fileName, out PEFile peFile)
+    public bool TryOpen(string fileName, [NotNullWhen(true)] out PEFile? peFile)
     {
         if (_byFileName.TryGetValue(fileName, out var uniqueness))
         {
@@ -68,21 +69,18 @@ public class PeFileCache
             }
         }
             
-        using (var fileStream = new MemoryStream())
+        if(TryLoadAssembly(fileName, out peFile))
         {
-            if(TryLoadAssembly(fileStream, PEStreamOptions.PrefetchEntireImage, fileName, out peFile))
-            {
-                var targetFrameworkId = peFile.DetectTargetFrameworkId();
-                uniqueness = peFile.FullName + '|' + targetFrameworkId;
-                _byFileName.TryAdd(fileName, uniqueness);
-                _peFileCache.TryAdd(uniqueness, peFile);
-                return true;
-            }
-            return false;
+            var targetFrameworkId = peFile.DetectTargetFrameworkId();
+            uniqueness = peFile.FullName + '|' + targetFrameworkId;
+            _byFileName.TryAdd(fileName, uniqueness);
+            _peFileCache.TryAdd(uniqueness, peFile);
+            return true;
         }
+        return false;
     }
     
-    private bool TryLoadAssembly(Stream stream, PEStreamOptions streamOptions, string fileName, out PEFile peFile)
+    private bool TryLoadAssembly(string fileName, [NotNullWhen(true)] out PEFile? peFile)
     {
         peFile = null;
         try
@@ -90,6 +88,11 @@ public class PeFileCache
             ClrModule? module = null;
             foreach (var clrModule in _clrRuntime.EnumerateModules())
             {
+                if (clrModule.Name == null)
+                {
+                    continue;
+                }
+
                 var moduleFileName = new FileInfo(clrModule.Name).Name;
                 var nameWithoutExtension = Path.GetFileNameWithoutExtension(moduleFileName);
                 if (fileName == nameWithoutExtension)
@@ -98,7 +101,7 @@ public class PeFileCache
                     break;
                 }
             }
-            if (module != null)
+            if (module != null && module.Name != null)
             {
                 using (MemoryStream memoryStream = new())
                 {

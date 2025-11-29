@@ -77,7 +77,7 @@ public class ClrUniqStack : DbgEngCommand
                         if (frame.Kind == ClrStackFrameKind.ManagedMethod)
                         {
                             var method = frame.Method;
-                            Console.WriteLine($"    {frame.StackPointer:x12} {frame.InstructionPointer:x12} {frame.FrameName} {method?.Type?.Name}.{method?.Name} {method?.MetadataToken}");
+                            Console.WriteLine($"    {frame.StackPointer:x12} {frame.InstructionPointer:x12} {frame.FrameName} {method?.Type.Name}.{method?.Name} {method?.MetadataToken}");
                         }
                     }
 

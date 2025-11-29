@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Text.RegularExpressions;
 using DbgEngExtension;
 using Microsoft.Diagnostics.Runtime;
 using Microsoft.Diagnostics.Runtime.Interfaces;
@@ -15,7 +16,7 @@ public class QueryCommand : DbgEngCommand
     }
     
     private static readonly Regex ArgsRx = new(
-        @"^\s*(?<debug>-debug\s+)?-(?<source>mt|addr|array)\s+(?<addr>\S+)\s+(?<rest>.+)$",
+        @"^\s*(?<debug>-debug\s+)?(?<short>-short\s+)?-(?<source>mt|addr|array|implements)\s+(?<addr>\S+)\s+(?<rest>.+)$",
         RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace | RegexOptions.Compiled);
     
     private static readonly Regex FieldsRx = new(
@@ -31,22 +32,25 @@ public class QueryCommand : DbgEngCommand
         var argsResult = ArgsRx.Match(args);
         if (!argsResult.Success)
         {
-            Console.WriteLine("Usage: [-debug] (-mt|-addr|-array) <address> (select <f1,f2,..> | where <expr>)");
+            Console.WriteLine("Usage: [-short] [-debug] (-mt|-addr|-array|implements) <address> (select <f1,f2,..> | where <expr>)");
             return;
         }
 
+        var isShort = argsResult.Groups["short"].Success;
         var debug= argsResult.Groups["debug"].Success;
         var sourceType= argsResult.Groups["source"].Value;
         var addrStr= argsResult.Groups["addr"].Value;
         var rest= argsResult.Groups["rest"].Value.Trim();
         
-        if (!Helper.TryParseAddress(addrStr, out var address))
+        ulong address = default;
+        if (sourceType != "implements" && !Helper.TryParseAddress(addrStr, out address))
         {
             Console.WriteLine($"Invalid address: {addrStr}");
             return;
         }
         
         QueryRunner.Debug = debug;
+        QueryRunner.PrintShort = isShort;
         if (debug)
         {
             Console.WriteLine($"[DEBUG] {sourceType}@0x{address:X} '{rest}'");
@@ -71,6 +75,12 @@ public class QueryCommand : DbgEngCommand
                     case "array":
                         whereResults = _queryRunner.CollectObjectsWhereForArray(runtime, address, predicates);
                         break;
+                    case "addr":
+                        whereResults = _queryRunner.CollectObjectsWhereForAddr(runtime, address, predicates);
+                        break;
+                    case "implements":
+                        whereResults = _queryRunner.CollectObjectsWhereForImplements(runtime, addrStr, predicates);
+                        break;
                 }
 
                 if (whereResults != null)
@@ -87,7 +97,7 @@ public class QueryCommand : DbgEngCommand
         {
             var fieldsArgs = fieldsResult.Groups["fields"].Value;
             var fields = fieldsArgs.Split(',').Select(s => s.Trim()).ToArray();
-            if (predicateResult.Success)
+            if (predicateResult.Success && predicates != null)
             {
                 foreach (var runtime in Runtimes)
                 {
@@ -99,6 +109,12 @@ public class QueryCommand : DbgEngCommand
                             break;
                         case "array":
                             whereResults = _queryRunner.CollectObjectsWhereForArray(runtime, address, predicates);
+                            break;
+                        case "addr":
+                            whereResults = _queryRunner.CollectObjectsWhereForAddr(runtime, address, predicates);
+                            break;
+                        case "implements":
+                            whereResults = _queryRunner.CollectObjectsWhereForImplements(runtime, addrStr, predicates);
                             break;
                     }
 
@@ -129,6 +145,9 @@ public class QueryCommand : DbgEngCommand
                         _queryRunner.RunSelectForArray(runtime, address, fields);
                         break;
                     }
+                    case "implements":
+                        _queryRunner.RunSelectForImplements(runtime, addrStr, fields);
+                        break;
                 }
             }
         }
@@ -142,14 +161,15 @@ public class QueryCommand : DbgEngCommand
 
     private class ClrInstanceFieldPath
     {
-        public string FieldName { get; set; }
-        public required IClrType Type { get; init; }
+        public string? FieldName { get; init; }
+        public required IClrType? Type { get; init; }
         public IComparable? Result { get; init; }
     }
 
     public class QueryRunner
     {
         public static bool Debug { private get; set; }
+        public static bool PrintShort { private get; set; }
 
         private static void Log(string template, params object[]? @params)
         {
@@ -168,7 +188,7 @@ public class QueryCommand : DbgEngCommand
                     {
                         return (true, s);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         var clrObject = runtime.Heap.GetObject(address);
                         return clrObject.AsString();
@@ -183,7 +203,7 @@ public class QueryCommand : DbgEngCommand
                         var success = bool.TryParse(s, out var result);
                         return (success, result);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         return runtime.DataTarget.DataReader.Read<Boolean>(address);
                     }
@@ -197,7 +217,7 @@ public class QueryCommand : DbgEngCommand
                         var success = Guid.TryParse(s, out var result);
                         return (success, result);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         return runtime.DataTarget.DataReader.Read<Guid>(address);
                     }
@@ -211,7 +231,7 @@ public class QueryCommand : DbgEngCommand
                         var success = DateTime.TryParse(s, out var result);
                         return (success, result);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         var dateTime = runtime.DataTarget.DataReader.Read<DateTime>(address);
                         return dateTime;
@@ -226,7 +246,7 @@ public class QueryCommand : DbgEngCommand
                         var success = DateTimeOffset.TryParse(s, out var result);
                         return (success, result);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         return runtime.DataTarget.DataReader.Read<DateTimeOffset>(address);
                     }
@@ -244,7 +264,7 @@ public class QueryCommand : DbgEngCommand
                         var success = Int16.TryParse(s, out var result);
                         return (success, result);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         var type = runtime.Heap.GetObjectType(address);
                         if (type != null && type.ElementType == ClrElementType.Int16)
@@ -264,7 +284,7 @@ public class QueryCommand : DbgEngCommand
                         var success = Int64.TryParse(s, out var result);
                         return (success, result);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         var type = runtime.Heap.GetObjectType(address);
                         if (type != null && type.ElementType == ClrElementType.Int64)
@@ -284,7 +304,7 @@ public class QueryCommand : DbgEngCommand
                         var success = Int32.TryParse(s, out var result);
                         return (success, result);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         var type = runtime.Heap.GetObjectType(address);
                         if (type != null && type.ElementType == ClrElementType.Int32)
@@ -304,7 +324,7 @@ public class QueryCommand : DbgEngCommand
                         var success = Double.TryParse(s, out var result);
                         return (success, result);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         var type = runtime.Heap.GetObjectType(address);
                         if (type != null && type.ElementType == ClrElementType.Double)
@@ -324,7 +344,7 @@ public class QueryCommand : DbgEngCommand
                         var success = float.TryParse(s, out var result);
                         return (success, result);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         var type = runtime.Heap.GetObjectType(address);
                         if (type != null && type.ElementType == ClrElementType.Float)
@@ -343,7 +363,7 @@ public class QueryCommand : DbgEngCommand
                     {
                         return (true, s);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         var clrObject = runtime.Heap.GetObject(address);
                         return clrObject.AsString();
@@ -358,7 +378,7 @@ public class QueryCommand : DbgEngCommand
                         var success = Helper.TryParseAddress(s, out var result);
                         return (success, result);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (runtime, _, address) =>
                     {
                         var clrObject = runtime.Heap.GetObject(address);
                         return clrObject.Address;
@@ -373,7 +393,7 @@ public class QueryCommand : DbgEngCommand
                         var success = Helper.TryParseAddress(s, out var result);
                         return (success, result);
                     },
-                    ReadFunc = (runtime, clrType, address) =>
+                    ReadFunc = (_, _, address) =>
                     {
                         return address;
                     }
@@ -418,7 +438,7 @@ public class QueryCommand : DbgEngCommand
                 return true;
             }
                 
-            Log("Unable to get field value for {0} {1} {2}", resultType.Name, resultType.ElementType, address);
+            Log("Unable to get field value for {0} {1} {2}", resultType.Name ?? string.Empty, resultType.ElementType, address);
             return false;
         }
         
@@ -426,7 +446,7 @@ public class QueryCommand : DbgEngCommand
             ClrRuntime runtime,
             string field,
             IClrValue obj,
-            out IReadOnlyList<ClrInstanceFieldPath>? tail)
+            [NotNullWhen(true)] out IReadOnlyList<ClrInstanceFieldPath>? tail)
         {
             tail = null;
 
@@ -454,8 +474,10 @@ public class QueryCommand : DbgEngCommand
                             Result = result
                         }
                     };
+                    return true;
                 }
-                return true;
+
+                return false;
             }
 
             var splitFields = field.Split('.');
@@ -517,8 +539,9 @@ public class QueryCommand : DbgEngCommand
                                 Result = result
                             }
                         ];
+                        return true;
                     }
-                    return true;
+                    return false;
                 }
             }
 
@@ -528,6 +551,11 @@ public class QueryCommand : DbgEngCommand
         private static List<ClrInstanceFieldPath> GetFieldsValuesForStar(ClrRuntime runtime, IClrType? current, IClrValue currentObj, IReadOnlyList<string> fieldPrefix)
         {
             var list = new List<ClrInstanceFieldPath>();
+
+            if (current == null)
+            {
+                return list;
+            }
 
             foreach (var f in current.Fields)
             {
@@ -560,7 +588,7 @@ public class QueryCommand : DbgEngCommand
             tail = null;
             if (TryParseFieldPathFromFieldExpression(runtime, field, obj, out IReadOnlyList<ClrInstanceFieldPath>? fields))
             {
-                if (fields != null && fields.Count == 1)
+                if (fields.Count == 1)
                 {
                     tail = fields.Single();
                     return true;
@@ -617,6 +645,7 @@ public class QueryCommand : DbgEngCommand
                     var actualType = tailInstanceFieldPath.Type;
 
                     if (fieldValue == null ||
+                        actualType == null ||
                         !TryParsePredicate(actualType, predicate, out IComparable? predicateValue) ||
                         predicateValue == null)
                     {
@@ -643,7 +672,7 @@ public class QueryCommand : DbgEngCommand
                             thisPredicateMatches = Equals(fieldValue, predicateValue);
                             break;
                         case WhereOperator.Matches when fieldValue is string s1:
-                            Regex rx = new Regex(s1);
+                            Regex rx = new Regex(predicate.Value);
                             thisPredicateMatches = rx.IsMatch(s1);
                             break;
                         default:
@@ -662,6 +691,25 @@ public class QueryCommand : DbgEngCommand
                     result.Add(obj);
             }
 
+            return result;
+        }
+        
+        public List<IClrValue> CollectObjectsWhereForImplements(
+            ClrRuntime runtime,
+            string fullInterfaceOrBastTypeName,
+            IReadOnlyList<WherePredicate> predicate)
+        {
+            var heap = runtime.Heap;
+            var result = new List<IClrValue>();
+            var types = ClrTypeExtensions.GetTypesThatImplement(runtime, fullInterfaceOrBastTypeName, false);
+            
+            foreach (var clrType in types)
+            {
+                var objs = heap.EnumerateObjects().Where(o => o.Type?.MethodTable == clrType.type.MethodTable).Cast<IClrValue>().ToList();
+                var typeResults =CollectObjectsWhere(runtime, objs, predicate);
+                result.AddRange(typeResults);
+            }
+            
             return result;
         }
         
@@ -700,14 +748,29 @@ public class QueryCommand : DbgEngCommand
             return CollectObjectsWhere(runtime, items, predicate);
         }
 
+        public List<IClrValue> CollectObjectsWhereForAddr(
+            ClrRuntime runtime,
+            ulong address,
+            IReadOnlyList<WherePredicate> predicate)
+        {
+            var heap = runtime.Heap;
+            var obj = heap.GetObject(address);
+            IClrValue[] items = [obj];
+            return CollectObjectsWhere(runtime, items, predicate);
+        }
+
         public void RunSelect(ClrRuntime runtime, IReadOnlyList<IClrValue> objs, IReadOnlyList<string> fields)
         {
             foreach (var obj in objs)
             {
-                Console.WriteLine("Address {0:x8}", obj.Address);
+                if (!PrintShort)
+                {
+                    Console.WriteLine("Address {0:x8}", obj.Address);
+                }
+
                 foreach (var field in fields)
                 {
-                    if (TryParseFieldPathFromFieldExpression(runtime, field, obj, out IReadOnlyList<ClrInstanceFieldPath> tailInstanceFieldPaths))
+                    if (TryParseFieldPathFromFieldExpression(runtime, field, obj, out IReadOnlyList<ClrInstanceFieldPath>? tailInstanceFieldPaths))
                     {
                         foreach (var tailInstanceFieldPath in tailInstanceFieldPaths)
                         {
@@ -716,7 +779,15 @@ public class QueryCommand : DbgEngCommand
                             {
                                 toPrint = $"{toPrint:x8}";
                             }
-                            Console.WriteLine("  {0}: {1}", tailInstanceFieldPath.FieldName, toPrint);
+
+                            if (PrintShort)
+                            {
+                                Console.WriteLine(toPrint);
+                            }
+                            else
+                            {
+                                Console.WriteLine("  {0}: {1}", tailInstanceFieldPath.FieldName, toPrint);
+                            }
                         }
                     }
                     else
@@ -724,6 +795,23 @@ public class QueryCommand : DbgEngCommand
                         Log("Unable to parse select field expression {0}", field);
                     }
                 }
+            }
+        }
+        
+        public void RunSelectForImplements(ClrRuntime runtime, string fullBaseTypeOrInterfaceName, IReadOnlyList<string> fields)
+        {
+            var types = ClrTypeExtensions.GetTypesThatImplement(runtime, fullBaseTypeOrInterfaceName, false);
+            foreach (var clrType in types)
+            {
+                RunSelect(runtime, clrType.type.MethodTable, fields);
+            }
+        }
+        
+        public void RunSelectForTypes(ClrRuntime runtime, IEnumerable<ClrType> types, IReadOnlyList<string> fields)
+        {
+            foreach (var clrType in types)
+            {
+                RunSelect(runtime, clrType.MethodTable, fields);
             }
         }
         
@@ -737,7 +825,7 @@ public class QueryCommand : DbgEngCommand
             
             RunSelect(runtime, [clrObject], fields);
         }
-
+        
         public void RunSelectForArray(ClrRuntime runtime, ulong address, IReadOnlyList<string> fields)
         {
             var clrObject = runtime.Heap.GetObject(address);
@@ -824,12 +912,12 @@ public class QueryExpressionParser
             .Select(s => s.Trim())
             .Where(s => s.Length > 0)
             .ToArray();
-
+        
         foreach (var predicateStr in predicateStrs)
         {
             int  operatorIndex = -1;
-            int  opStrLen      = -1;
-            WhereOperator? op  = null;
+            int  opStrLen = -1;
+            WhereOperator? op = null;
 
             foreach (var opString in Operators.Keys)
             {

@@ -24,14 +24,10 @@ public static unsafe class Extension
         Console.WriteLine("dumpconcurrentqueue (dcq) | -list [containsFilter]");
         Console.WriteLine("getmetodname (gmn) [methodptr]");
         Console.WriteLine("tasks (tks) -detail [state]");
-        Console.WriteLine("dumpgen [gen0|gen1|gen2]");
         Console.WriteLine("blockinginfo");
-        Console.WriteLine("heapstat");
         Console.WriteLine("decompilemethod -sp [address] | -ip [instructionPointer] | -md [methodDesc]");
         Console.WriteLine("decompiletype -ad [address] | -nm [fullTypeName] | -ip [instructionPointer]");
         Console.WriteLine("savemodule [modulename]");
-        Console.WriteLine("findref -recurse[r] address");
-        Console.WriteLine("uniqgcroot [methodTable]");
         
         return 0;
     }
@@ -48,24 +44,6 @@ public static unsafe class Extension
         catch (Exception e)
         {
             Console.Error.WriteLine($"Failed to run {nameof(UniqClrStack)} command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-
-    [UnmanagedCallersOnly(EntryPoint = "threads", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int Threads(nint pUnknown, nint args)
-    {
-        try
-        {
-            Threads cmd = new(pUnknown);
-            string? arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"Failed to run {nameof(Threads)} command.");
             Console.Error.WriteLine(e);
         }
 
@@ -142,7 +120,7 @@ public static unsafe class Extension
         return _ThreadPoolQueue(pUnknown, args);
     }
 
-    private static readonly ThreadPool _threadPool = new ThreadPool(new ConcurrentQueue());
+    private static readonly ThreadPool _threadPool = new(new ConcurrentQueue());
     private static int _ThreadPoolQueue(nint pUnknown, nint args)
     {
         try
@@ -247,30 +225,6 @@ public static unsafe class Extension
         return 0;
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "dumpgen", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int DumpGen(nint pUnknown, nint args)
-    {
-        return _DumGen(pUnknown, args);
-    }
-
-    private static readonly GcGenerationInfoProvider GcGenerationInfoProvider = new GcGenerationInfoProvider();
-    private static int _DumGen(nint pUnknown, nint args)
-    {
-        try
-        {
-            GcGenerationInfoCommand cmd = new(GcGenerationInfoProvider, pUnknown);
-            string? arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"Failed to run {nameof(GcGenerationInfoCommand)} command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-
     private static readonly BlockingInfoProvider BlockingInfoProvider = new BlockingInfoProvider();
     [UnmanagedCallersOnly(EntryPoint = "blockinginfo", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int BlockingInfo(nint pUnknown, nint args)
@@ -289,54 +243,6 @@ public static unsafe class Extension
         catch (Exception e)
         {
             Console.Error.WriteLine($"Failed to run {nameof(BlockingInfoCommand)} command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-    
-    [UnmanagedCallersOnly(EntryPoint = "heapstat", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int HeapStat(nint pUnknown, nint args)
-    {
-        return _HeapStat(pUnknown, args);
-    }
-
-    private static readonly HeapStatProvider HeapStatProvider = new HeapStatProvider();
-    private static int _HeapStat(nint pUnknown, nint args)
-    {
-        try
-        {
-            HeapStatCommand cmd = new(HeapStatProvider, pUnknown);
-            string? arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"Failed to run {nameof(BlockingInfoCommand)} command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-    
-    [UnmanagedCallersOnly(EntryPoint = "findref", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int FindRef(nint pUnknown, nint args)
-    {
-        return _FindRef(pUnknown, args);
-    }
-    
-    private static readonly FindRefProvider FindRefProvider = new();
-    private static int _FindRef(nint pUnknown, nint args)
-    {
-        try
-        {
-            FindRefCommand cmd = new(FindRefProvider, pUnknown);
-            string? arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"Failed to run {nameof(FindRefCommand)} command.");
             Console.Error.WriteLine(e);
         }
 
@@ -439,75 +345,6 @@ public static unsafe class Extension
         return 0;
     }
     
-    [UnmanagedCallersOnly(EntryPoint = "threadrefs", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int ThreadRefs(nint pUnknown, nint args)
-    {
-        return _ThreadRefs(pUnknown, args);
-    }
-    
-    private static readonly ThreadRefsProvider ThreadRefsProvider = new();
-    private static int _ThreadRefs(nint pUnknown, nint args)
-    {
-        try
-        {
-            ThreadRefsCommand cmd = new(ThreadRefsProvider, pUnknown);
-            string? arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"Failed to run {nameof(ThreadRefsCommand)} command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-    
-    [UnmanagedCallersOnly(EntryPoint = "uniqgcroot", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int UniqGcRoot(nint pUnknown, nint args)
-    {
-        return _UniqGcRoot(pUnknown, args);
-    }
-
-    private static int _UniqGcRoot(nint pUnknown, nint args)
-    {
-        try
-        {
-            UniqGcRootCommand cmd = new(pUnknown);
-            string? arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"Failed to run {nameof(UniqGcRootCommand)} command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-    
-    [UnmanagedCallersOnly(EntryPoint = "tselect", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int TSelect(nint pUnknown, nint args)
-    {
-        return _TSelect(pUnknown, args);
-    }
-    private static int _TSelect(nint pUnknown, nint args)
-    {
-        try
-        {
-            TSelectCommand cmd = new(pUnknown);
-            string? arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"Failed to run {nameof(TSelectCommand)} command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-    
     [UnmanagedCallersOnly(EntryPoint = "tsemaphore", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int tsemaphore(nint pUnknown, nint args)
     {
@@ -556,25 +393,49 @@ public static unsafe class Extension
         return 0;
     }
     
-    [UnmanagedCallersOnly(EntryPoint = "twhere", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int twhere(nint pUnknown, nint args)
+    [UnmanagedCallersOnly(EntryPoint = "tstore", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int tstore(nint pUnknown, nint args)
     {
-        return _twhere(pUnknown, args);
+        return _tstore(pUnknown, args);
     }
-    private static int _twhere(nint pUnknown, nint args)
+
+    private static int _tstore(nint pUnknown, nint args)
     {
         try
         {
-            TWhereCommand cmd = new(pUnknown);
+            StoreCommand cmd = new (pUnknown);
             string? arguments = Marshal.PtrToStringAnsi(args);
             cmd.Run(arguments ?? "");
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"Failed to run {nameof(TWhereCommand)} command.");
+            Console.Error.WriteLine($"Failed to run {nameof(StoreCommand)} command.");
             Console.Error.WriteLine(e);
         }
+        
+        return 0;
+    }
 
+    [UnmanagedCallersOnly(EntryPoint = "types", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int types(nint pUnknown, nint args)
+    {
+        return _types(pUnknown, args);
+    }
+
+    private static int _types(nint pUnknown, nint args)
+    {
+        try
+        {
+            TypesCommand cmd = new (pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(TypesCommand)} command");
+            Console.Error.WriteLine(e);
+        }
+        
         return 0;
     }
 }

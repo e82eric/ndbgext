@@ -120,10 +120,10 @@ public class DecompileMethodProvider
             PrintFrame(currentFrame, true);
             PrintFrame(previousFrame, false);
             Console.WriteLine();
-            var code = _decompiler.DecompileMethodWithCurrentLineIndicator(runtime, clrMethod, ilOffsets, nextFrame.Method?.Name);
+            var code = _decompiler.DecompileMethodWithCurrentLineIndicator(runtime, clrMethod, ilOffsets, nextFrame?.Method?.Name);
             Console.WriteLine(code);
 
-            if (previousFrame != null && currentFrame != null)
+            if (previousFrame != null)
             {
                 Console.WriteLine();
                 Console.WriteLine("Frame data: {0:X} {1:X}", currentFrame.StackPointer, previousFrame.StackPointer);
@@ -149,7 +149,7 @@ public class DecompileMethodProvider
                     }
                 }
 
-                var distinctLocals = locals.Distinct(new LocalComparer());
+                var distinctLocals = locals.Distinct();
                 foreach (var local in distinctLocals)
                 {
                     Console.WriteLine("{0:X} {1:X} {2}", local.MethodTable, local.Address, local.Type);
@@ -239,28 +239,17 @@ public class DecompileMethodProvider
                 yield return ptr;
     }
 
-    struct Local
+    readonly struct Local : IEquatable<Local>
     {
-        public ulong MethodTable;
-        public ulong Address;
-        public string Type;
-    }
+        public ulong MethodTable { get; init; }
+        public ulong Address { get; init; }
+        public string? Type { get; init; }
 
-    private class LocalComparer : IEqualityComparer<Local>
-    {
-        public bool Equals(Local x, Local y)
-        {
-            if (ReferenceEquals(x, y)) return true;
+        public bool Equals(Local other) => Address == other.Address;
 
-            if (ReferenceEquals(x, null) || ReferenceEquals(y, null))
-                return false;
+        public override bool Equals(object? obj) =>
+            obj is Local other && Equals(other);
 
-            return x.Address == y.Address;
-        }
-
-        public int GetHashCode(Local local)
-        {
-            return local.Address.GetHashCode();
-        }
+        public override int GetHashCode() => Address.GetHashCode();
     }
 }

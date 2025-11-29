@@ -26,7 +26,7 @@ sealed class DbgEngAssemblyResolver : IAssemblyResolver
             settings.ApplyWindowsRuntimeProjections ? MetadataReaderOptions.ApplyWindowsRuntimeProjections : MetadataReaderOptions.None);
     }
 
-    public PEFile Resolve(IAssemblyReference reference)
+    public MetadataFile? Resolve(IAssemblyReference reference)
     {
         if (_peFileCache.TryGetByNameAndFrameworkId(reference.FullName, _targetFrameworkId, out var result))
         {
@@ -52,9 +52,9 @@ sealed class DbgEngAssemblyResolver : IAssemblyResolver
         return null;
     }
 
-    public PEFile ResolveModule(PEFile mainModule, string moduleName)
+    public MetadataFile? ResolveModule(MetadataFile mainModule, string moduleName)
     {
-        PEFile result = null;
+        PEFile? result;
         if (_peFileCache.TryGetByNameAndFrameworkId(moduleName, _targetFrameworkId, out result))
         {
             return result;
@@ -76,15 +76,15 @@ sealed class DbgEngAssemblyResolver : IAssemblyResolver
             return fromUniversal;
         }
             
-        return null;
+        return result;
     }
         
-    public Task<PEFile> ResolveAsync(IAssemblyReference reference)
+    public Task<MetadataFile?> ResolveAsync(IAssemblyReference reference)
     {
         return Task.FromResult(Resolve(reference));
     }
 
-    public Task<PEFile> ResolveModuleAsync(PEFile mainModule, string moduleName)
+    public Task<MetadataFile?> ResolveModuleAsync(MetadataFile mainModule, string moduleName)
     {
         return Task.FromResult(ResolveModule(mainModule, moduleName));
     }

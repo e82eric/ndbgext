@@ -1,11 +1,9 @@
-﻿using System.Collections;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
 using DbgEngExtension;
 using ICSharpCode.Decompiler.Util;
 using Microsoft.Diagnostics.Runtime;
 using Microsoft.Diagnostics.Runtime.Interfaces;
-using Microsoft.Extensions.Primitives;
 
 namespace ndbgext;
 

@@ -72,7 +72,6 @@ public class DecompileTypeCommand : DbgEngCommand
                         }
                         break;
                     case "-md":
-                        var md = arguments[1];
                         if(Helper.TryParseToken(arguments[1], out var parsedMd))
                         {
                             foreach (var runtime in Runtimes)
@@ -86,7 +85,6 @@ public class DecompileTypeCommand : DbgEngCommand
                         }
                         break;
                     case "-mt":
-                        var mt = arguments[1];
                         if(Helper.TryParseAddress(arguments[1], out var parsedMt))
                         {
                             foreach (var runtime in Runtimes)
@@ -120,7 +118,7 @@ public class DecompileTypeProvider
     public void Run(ClrRuntime runtime, ulong address)
     {
         var type = runtime.Heap.GetObjectType(address);
-        if (type != null)
+        if (type != null && type.Name != null)
         {
             var code = _decompiler.DecompileType(runtime, type.Name, type);
             Console.WriteLine(code);
@@ -142,7 +140,7 @@ public class DecompileTypeProvider
                 break;
             }
         }
-        if (type != null)
+        if (type != null && type.Name != null)
         {
             var code = _decompiler.DecompileType(runtime, type.Name, type);
             Console.WriteLine(code);
@@ -162,9 +160,9 @@ public class DecompileTypeProvider
             {
                 type = clrObject.Type;
                 break;
-            };
+            }
         }
-        if (type != null)
+        if (type != null && type.Name != null)
         {
             var code = _decompiler.DecompileType(runtime, type.Name, type);
             Console.WriteLine(code);
@@ -187,23 +185,26 @@ public class DecompileTypeProvider
     
     public void RunByName(ClrRuntime runtime, string typeName)
     {
-        ClrType? type = null;
-        foreach (var clrModule in runtime.EnumerateModules())
-        {
-            type = clrModule.GetTypeByName(typeName);
-            if (type != null)
-            {
-                break;
-            }
-        }
-        if (type != null)
-        {
-            var code = _decompiler.DecompileType(runtime, type.Name, type);
-            Console.WriteLine(code);
-        }
-        else
-        {
-            Console.WriteLine("Could not find type at typeName {0}", typeName);
-        }
+        var code = _decompiler.DecompileType(runtime, typeName);
+        Console.WriteLine(code);
+        
+        // ClrType? type = null;
+        // foreach (var clrModule in runtime.EnumerateModules())
+        // {
+        //     type = clrModule.GetTypeByName(typeName);
+        //     if (type != null)
+        //     {
+        //         break;
+        //     }
+        // }
+        // if (type != null && type.Name != null)
+        // {
+        //     var code = _decompiler.DecompileType(runtime, type.Name, type);
+        //     Console.WriteLine(code);
+        // }
+        // else
+        // {
+        //     Console.WriteLine("Could not find type at typeName {0}", typeName);
+        // }
     }
 }

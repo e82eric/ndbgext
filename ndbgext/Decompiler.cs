@@ -1,4 +1,5 @@
-﻿using System.Reflection.Metadata;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
@@ -26,7 +27,8 @@ public class Decompiler
         };
         _dllExtractor = dllExtractor;
     }
-    public string DecompileMethodWithCurrentLineIndicator(ClrRuntime runtime, ClrMethod method, IList<int> ilOffsets, string nextMethodName)
+    
+    public string DecompileMethodWithCurrentLineIndicator(ClrRuntime runtime, ClrMethod method, IList<int> ilOffsets, string? nextMethodName)
     {
         if (TryDecompileMethod(runtime, method, out var syntaxTree, out var decompiler))
         {
@@ -49,13 +51,13 @@ public class Decompiler
                     var sp = FindSeqPointByOffset(offset, sps);
                     if (sp != null && split.Length >= sp.StartLine)
                     {
-                        if (split[sp.StartLine - 1].Contains(nextMethodName))
+                        if (nextMethodName != null && split[sp.StartLine - 1].Contains(nextMethodName))
                         {
-                            lineMatches.Add(new LineMatch{ lineNumber = sp.StartLine, methodNameMatches = true});
+                            lineMatches.Add(new LineMatch{ LineNumber = sp.StartLine, MethodNameMatches = true});
                         }
                         else
                         {
-                            lineMatches.Add(new LineMatch{ lineNumber = sp.StartLine, methodNameMatches = false});
+                            lineMatches.Add(new LineMatch{ LineNumber = sp.StartLine, MethodNameMatches = false});
                         }
                     }
                 }
@@ -71,8 +73,8 @@ public class Decompiler
 
                 foreach (var lineMatch in lineMatches)
                 {
-                    var symbol = lineMatch.methodNameMatches ? matchSymbol : nonMatchSymbol;
-                    split[lineMatch.lineNumber - 1] = symbol + split[lineMatch.lineNumber - 1];
+                    var symbol = lineMatch.MethodNameMatches ? matchSymbol : nonMatchSymbol;
+                    split[lineMatch.LineNumber - 1] = symbol + split[lineMatch.LineNumber - 1];
                 }
                 
                 return string.Join("\n", split);
@@ -96,15 +98,20 @@ public class Decompiler
         return string.Empty;
     }
     
-    private bool TryDecompileMethod(ClrRuntime runtime, ClrMethod method, out SyntaxTree syntaxTree, out CSharpDecompiler decompiler)
+    private bool TryDecompileMethod(ClrRuntime runtime, ClrMethod method, [NotNullWhen(true)]out SyntaxTree? syntaxTree, [NotNullWhen(true)]out CSharpDecompiler? decompiler)
     {
-        Console.WriteLine("Type: {0}", method.Type.Name);
-        
         syntaxTree = null;
         decompiler = null;
-        PEFile peFile = GetPeFile(runtime, method.Type.Module.Name, method.Type);
+        if (method.Type.Module.Name == null)
+        {
+            return false;
+        }
 
-        decompiler = GetDecompiler(runtime, method.Type.Module, peFile, _settings);
+        Console.WriteLine("Type: {0}", method.Type.Name);
+        
+        PEFile peFile = GetPeFile(runtime, method.Type.Module.Name, method.Type.Module.ImageBase);
+
+        decompiler = GetDecompiler(runtime, method.Type.Module.Name, peFile, _settings);
         var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.GetAllTypeDefinitions()
             .FirstOrDefault(t => t.MetadataToken.GetHashCode() == method.Type.MetadataToken);
         
@@ -122,19 +129,43 @@ public class Decompiler
         return false;
     }
 
-    private CSharpDecompiler GetDecompiler(ClrRuntime runtime, ClrModule module, PEFile peFile, DecompilerSettings settings)
+    private CSharpDecompiler GetDecompiler(ClrRuntime runtime, string moduleName, PEFile peFile, DecompilerSettings settings)
     {
-        var resolver = new DbgEngAssemblyResolver(new PeFileCache(_dllExtractor, runtime),
-            peFile, settings, module.Name);
+        var resolver = new DbgEngAssemblyResolver(new PeFileCache(_dllExtractor, runtime), peFile, settings, moduleName);
         var typeSystem = new DecompilerTypeSystem(peFile, resolver);
         var decompiler = new CSharpDecompiler(typeSystem, settings);
         return decompiler;
     }
+    
+    public string DecompileType(ClrRuntime runtime, string fullTypeName)
+    {
+        foreach (var module in runtime.EnumerateModules())
+        {
+            if (module.Name != null)
+            {
+                var peFile = GetPeFile(runtime, module.Name,  module.ImageBase);
+                var typeDefinition = peFile.GetTypeDefinition(new TopLevelTypeName(fullTypeName));
+                if (!typeDefinition.IsNil)
+                {
+                    var decompiler = GetDecompiler(runtime, module.Name, peFile, _settings);
+                    var code = decompiler.Decompile(typeDefinition);
+                    return code.ToString();
+                }
+            }
+        }
+
+        return string.Empty;
+    }
 
     public string DecompileType(ClrRuntime runtime, string filePath, ClrType type)
     {
-        var peFile = GetPeFile(runtime, filePath, type);
-        var decompiler = GetDecompiler(runtime, type.Module, peFile, _settings);
+        if (type.Module.Name == null)
+        {
+            return string.Empty;
+        }
+
+        var peFile = GetPeFile(runtime, filePath, type.Module.ImageBase);
+        var decompiler = GetDecompiler(runtime, type.Module.Name, peFile, _settings);
         var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.GetAllTypeDefinitions()
             .FirstOrDefault(t => t.MetadataToken.GetHashCode() == type.MetadataToken);
 
@@ -147,12 +178,12 @@ public class Decompiler
         return string.Empty;
     }
 
-    private PEFile GetPeFile(ClrRuntime runtime, string filePath, ClrType type)
+    private PEFile GetPeFile(ClrRuntime runtime, string filePath, ulong imageBase)
     {
         PEFile peFile;
         using (var memoryStream = new MemoryStream())
         {
-            _dllExtractor.Extract(runtime.DataTarget.DataReader, type.Module.ImageBase, memoryStream);
+            _dllExtractor.Extract(runtime.DataTarget.DataReader, imageBase, memoryStream);
 
             memoryStream.Seek(0, SeekOrigin.Begin);
             peFile = new PEFile(
@@ -183,7 +214,7 @@ public class Decompiler
 
     struct LineMatch
     {
-        public int lineNumber;
-        public bool methodNameMatches;
+        public int LineNumber;
+        public bool MethodNameMatches;
     }
 }

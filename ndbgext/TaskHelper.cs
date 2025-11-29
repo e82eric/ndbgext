@@ -1,25 +1,34 @@
-﻿using Microsoft.Diagnostics.Runtime;
+﻿using System.Diagnostics.CodeAnalysis;
+using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
 
 public static class TaskHelper
 {
-    public static bool TryGetTaskItem(ClrRuntime runtime, ClrObject heapObject, out TasksItem? item)
+    public static bool TryGetTaskItem(ClrRuntime runtime, ClrObject heapObject, [NotNullWhen(true)] out TasksItem? item)
     {
+        item = null;
+        if (heapObject.Type == null || heapObject.Type.Name == null)
+        {
+            return false;
+        }
+
         if (heapObject.TryReadValueTypeField("m_taskId", out var _))
         {
             if(heapObject.TryReadValueTypeField("m_stateFlags", out var _))
             {
                 var stateFlags = heapObject.ReadField<ulong>("m_stateFlags");
-                item = new TasksItem();
-                item.TaskName = heapObject.Type.Name;
-                item.Address = heapObject.Address;
-                item.TaskState = GetTaskState(stateFlags);
-                item.Method = Helper.GetDelegateMethod(runtime, heapObject);
+                item = new TasksItem
+                {
+                    TaskName = heapObject.Type.Name,
+                    Address = heapObject.Address,
+                    TaskState = GetTaskState(stateFlags),
+                    Method = Helper.GetDelegateMethod(runtime, heapObject)
+                };
 
                 if (heapObject.TryReadObjectField("m_stateObject", out var stateObject))
                 {
-                    if (!stateObject.IsNull && stateObject.IsValid)
+                    if (!stateObject.IsNull && stateObject.IsValid && stateObject.Type != null)
                     {
                         item.StateMachine = stateObject.Type.Name;
                     }
@@ -27,7 +36,7 @@ public static class TaskHelper
                         
                 if (heapObject.TryReadObjectField("m_continuationObject", out var continuationObject))
                 {
-                    if (!continuationObject.IsNull && continuationObject.IsValid)
+                    if (!continuationObject.IsNull && continuationObject.IsValid && continuationObject.Type != null)
                     {
                         if (continuationObject.TryReadObjectField("StateMachine", out var stateMachine))
                         {
@@ -67,7 +76,7 @@ public static class TaskHelper
         else if ((flag & TASK_STATE_STARTED) != 0) result = TaskStatus.WaitingToRun;
         else if ((flag & TASK_STATE_WAITINGFORACTIVATION) != 0) result = TaskStatus.WaitingForActivation;
         else if (flag == 0) result = TaskStatus.Created;
-        else return null;
+        else return $"Unknown (0x{flag:X})";
 
         return result.ToString();
     }

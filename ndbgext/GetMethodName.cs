@@ -12,11 +12,6 @@ public class GetMethodNameCommand : DbgEngCommand
     {
     }
 
-    public GetMethodNameCommand(IDisposable dbgeng, bool redirectConsoleOutput = false)
-        : base(dbgeng, redirectConsoleOutput)
-    {
-    }
-
     internal void Run(string args)
     {
         if (string.IsNullOrEmpty(args))
@@ -27,14 +22,16 @@ public class GetMethodNameCommand : DbgEngCommand
 
         var arguments = args.Split(' ');
 
-        var address = arguments[0];
         if (Helper.TryParseAddress(arguments[0], out var reference))
         {
             foreach (var runtime in Runtimes)
             {
                 var method = _getMethodName.Get(runtime, reference);
-                Console.WriteLine("TypeName: {0}", method.Type.Name);
-                Console.WriteLine("MethodName: {0}", method.Name);
+                if (method != null)
+                {
+                    Console.WriteLine("TypeName: {0}", method.Type.Name);
+                    Console.WriteLine("MethodName: {0}", method.Name);
+                }
             }
         }
         
@@ -44,7 +41,7 @@ public class GetMethodNameCommand : DbgEngCommand
 
 public class GetMethodName
 {
-    public ClrMethod Get(ClrRuntime runtime, ulong address)
+    public ClrMethod? Get(ClrRuntime runtime, ulong address)
     {
         var method = runtime.GetMethodByInstructionPointer(address);
         return method;
