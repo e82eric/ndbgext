@@ -191,7 +191,11 @@ public class QueryCommand : DbgEngCommand
                     ReadFunc = (runtime, _, address) =>
                     {
                         var clrObject = runtime.Heap.GetObject(address);
-                        return clrObject.AsString();
+                        if (!clrObject.IsNull && clrObject.IsValid)
+                        {
+                            return clrObject.AsString();
+                        }
+                        return string.Empty;
                     }
                 }
             },
