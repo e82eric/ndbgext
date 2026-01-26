@@ -9,6 +9,32 @@ namespace HeapStat
 {
     internal static class Program
     {
+        static bool TryParseAddress(string addressInHexa, out ulong address)
+        {
+            if (string.IsNullOrWhiteSpace(addressInHexa))
+            {
+                address = 0;
+                return false;
+            }
+
+            // skip 0x or leading 0000 if needed
+            if (addressInHexa.StartsWith("0x"))
+            {
+                addressInHexa = addressInHexa.Substring(2);
+            }
+
+            addressInHexa = addressInHexa.TrimStart('0');
+
+            int index = addressInHexa.IndexOf('`');
+            if (index >= 0 && index < addressInHexa.Length - 1)
+            {
+                // Remove up to one instance of ` since that's what WinDbg adds to its x64 addresses.
+                addressInHexa = addressInHexa.Substring(0, index) + addressInHexa.Substring(index + 1);
+            }
+
+            return ulong.TryParse(addressInHexa, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out address);
+        }
+        
         public static int Main(string[] args)
         {
             if (args.Length == 0 || !int.TryParse(args[0], out int pid))
@@ -17,11 +43,44 @@ namespace HeapStat
                 return 2;
             }
 
+            string gcRootType = null;
+            if (args.Length == 2)
+            {
+                gcRootType = args[1];
+            }
+
             try
             {
                 using (DataTarget target = DataTarget.AttachToProcess(pid, false))
                 {
                     ClrRuntime runtime = target.ClrVersions[0].CreateRuntime();
+
+                    if (gcRootType != null)
+                    {
+                        ClrObject? gcRootObj = null;
+                        foreach (var obj in runtime.Heap.EnumerateObjects())
+                        {
+                            if (obj.Type?.Name == gcRootType)
+                            {
+                                gcRootObj = obj;
+                                break;
+                            }
+                        }
+
+                        if (gcRootObj != null)
+                        {
+                            var consoleService = new ConsoleService();
+                            var gcRoot = new GCRootCommand(
+                                new MemoryServiceFromDataReader(runtime.DataTarget.DataReader),
+                                new RootCacheService(runtime, consoleService),
+                                new StaticVariableService(),
+                                consoleService);
+                            
+                            gcRoot.TargetAddress = gcRootObj.Value.Address;
+                            gcRoot.Invoke(runtime);
+                            return 0;
+                        }
+                    }
 
                     var heap = runtime.Heap;
                     if (!heap.CanWalkHeap)

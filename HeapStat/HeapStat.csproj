@@ -92,9 +92,11 @@
           <HintPath>..\packages\System.Threading.Tasks.Extensions.4.5.2\lib\netstandard2.0\System.Threading.Tasks.Extensions.dll</HintPath>
         </Reference>
         <Reference Include="System.Xml"/>
+        <Reference Include="System.Xml.Linq" />
     </ItemGroup>
     <ItemGroup>
         <Compile Include="DumpAsyncCommand.cs" />
+        <Compile Include="GCRootCommand.cs" />
         <Compile Include="Program.cs"/>
         <Compile Include="Properties\AssemblyInfo.cs"/>
     </ItemGroup>
