@@ -2255,6 +2255,11 @@ namespace HeapStat
 
         public ClrRuntime Runtime { get; set; }
 
+        public StaticVariableService(ClrRuntime runtime)
+        {
+            Runtime = runtime;
+        }
+
         /// <summary>
         /// Returns the static field at the given address.
         /// </summary>
