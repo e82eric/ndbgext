@@ -73,7 +73,7 @@ namespace HeapStat
                             var gcRoot = new GCRootCommand(
                                 new MemoryServiceFromDataReader(runtime.DataTarget.DataReader),
                                 new RootCacheService(runtime, consoleService),
-                                new StaticVariableService(),
+                                new StaticVariableService(runtime),
                                 consoleService);
                             
                             gcRoot.TargetAddress = gcRootObj.Value.Address;
