@@ -28,6 +28,7 @@ public static unsafe class Extension
         Console.WriteLine("decompilemethod -sp [address] | -ip [instructionPointer] | -md [methodDesc]");
         Console.WriteLine("decompiletype -ad [address] | -nm [fullTypeName] | -ip [instructionPointer]");
         Console.WriteLine("savemodule [modulename]");
+        Console.WriteLine("inclusivebytes -n [N]");
         
         return 0;
     }
@@ -436,6 +437,29 @@ public static unsafe class Extension
             Console.Error.WriteLine(e);
         }
         
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "inclusivebytes", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int inclusivebytes(nint pUnknown, nint args)
+    {
+        return _inclusivebytes(pUnknown, args);
+    }
+
+    private static int _inclusivebytes(nint pUnknown, nint args)
+    {
+        try
+        {
+            InclusiveBytesCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(InclusiveBytesCommand)} command");
+            Console.Error.WriteLine(e);
+        }
+
         return 0;
     }
 }

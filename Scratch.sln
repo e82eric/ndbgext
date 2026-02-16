@@ -12,6 +12,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Decompiler", "Decompiler\De
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClrMdHost", "ClrMdHost\ClrMdHost.csproj", "{CD09C1EA-4645-4F26-AE18-D261EB2CC3ED}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InclusiveTest", "InclusiveTest\InclusiveTest.csproj", "{155CE63A-92E0-4A10-986B-00BF0C400DA0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -42,5 +44,9 @@ Global
 		{CD09C1EA-4645-4F26-AE18-D261EB2CC3ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CD09C1EA-4645-4F26-AE18-D261EB2CC3ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CD09C1EA-4645-4F26-AE18-D261EB2CC3ED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{155CE63A-92E0-4A10-986B-00BF0C400DA0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{155CE63A-92E0-4A10-986B-00BF0C400DA0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{155CE63A-92E0-4A10-986B-00BF0C400DA0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{155CE63A-92E0-4A10-986B-00BF0C400DA0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
