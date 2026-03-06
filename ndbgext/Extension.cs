@@ -29,6 +29,9 @@ public static unsafe class Extension
         Console.WriteLine("decompiletype -ad [address] | -nm [fullTypeName] | -ip [instructionPointer]");
         Console.WriteLine("savemodule [modulename]");
         Console.WriteLine("inclusivebytes -n [N]");
+        Console.WriteLine("buildmemorygraph");
+        Console.WriteLine("totaltypebytes");
+        Console.WriteLine("typebytes <TypeName> [--max-type-roots N] [--max-tree-nodes N] [--max-depth N] [--quiet]");
         
         return 0;
     }
@@ -457,6 +460,60 @@ public static unsafe class Extension
         catch (Exception e)
         {
             Console.Error.WriteLine($"Failed to run {nameof(InclusiveBytesCommand)} command");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buildmemorygraph", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int BuildMemoryGraph(nint pUnknown, nint args)
+    {
+        try
+        {
+            BuildMemoryGraphCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("Failed to run buildmemorygraph command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "totaltypebytes", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int TotalTypeBytes(nint pUnknown, nint args)
+    {
+        try
+        {
+            TotalTypeBytesCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("Failed to run totaltypebytes command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "typebytes", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int TypeBytes(nint pUnknown, nint args)
+    {
+        try
+        {
+            TypeBytesCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("Failed to run typebytes command.");
             Console.Error.WriteLine(e);
         }
 
