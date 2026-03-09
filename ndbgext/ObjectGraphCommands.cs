@@ -114,17 +114,17 @@ public sealed class RetainedByteStatCommand : DbgEngCommand
         }
 
         var ordered = ObjectGraphCache.RetainedSizeResult.Types
-            .Where(type => type.RetainedBytes >= minimumRetainedBytes)
-            .OrderByDescending(type => type.RetainedBytes)
+            .Where(type => type.MinimumRetainedBytes >= minimumRetainedBytes)
+            .OrderByDescending(type => type.MinimumRetainedBytes)
             .ThenByDescending(type => type.ExclusiveBytes)
             .ThenBy(type => type.FullName, StringComparer.Ordinal);
 
-        Console.WriteLine("{0,16} {1,16} {2}", "Retained Bytes", "Bytes", "Type");
+        Console.WriteLine("{0,16} {1,16} {2}", "Min Retained", "Bytes", "Type");
         foreach (ObjectGraph.TypeSummary type in ordered)
         {
             Console.WriteLine(
                 "{0,16:n0} {1,16:n0} {2}",
-                type.RetainedBytes,
+                type.MinimumRetainedBytes,
                 type.ExclusiveBytes,
                 ObjectGraphCommandFormatting.FormatTypeName(type));
         }
