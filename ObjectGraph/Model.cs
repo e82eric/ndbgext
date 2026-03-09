@@ -1,39 +1,56 @@
+using System;
 using System.Collections.Generic;
 
 namespace ObjectGraph;
 
 public sealed class ObjectGraph
 {
-    internal ObjectGraph(int rootId, List<ObjectNode> nodes, List<TypeInfo> types)
+    private readonly ulong[] _addresses;
+    private readonly int[] _typeIds;
+    private readonly int[] _sizes;
+    private readonly int[] _childStarts;
+    private readonly int[] _childCounts;
+    private readonly int[] _children;
+    private readonly int[] _parentStarts;
+    private readonly int[] _parentCounts;
+    private readonly int[] _parents;
+
+    internal ObjectGraph(
+        int rootId,
+        ulong[] addresses,
+        int[] typeIds,
+        int[] sizes,
+        int[] childStarts,
+        int[] childCounts,
+        int[] children,
+        int[] parentStarts,
+        int[] parentCounts,
+        int[] parents,
+        List<TypeInfo> types)
     {
         RootId = rootId;
-        Nodes = nodes;
+        _addresses = addresses;
+        _typeIds = typeIds;
+        _sizes = sizes;
+        _childStarts = childStarts;
+        _childCounts = childCounts;
+        _children = children;
+        _parentStarts = parentStarts;
+        _parentCounts = parentCounts;
+        _parents = parents;
         Types = types;
     }
 
     public int RootId { get; }
-    public IReadOnlyList<ObjectNode> Nodes { get; }
+    public int NodeCount => _typeIds.Length;
     public IReadOnlyList<TypeInfo> Types { get; }
-}
-
-public sealed class ObjectNode
-{
-    internal ObjectNode(int id, ulong address, int typeId, int size)
-    {
-        Id = id;
-        Address = address;
-        TypeId = typeId;
-        Size = size;
-        Children = new List<int>();
-        Parents = new List<int>();
-    }
-
-    public int Id { get; }
-    public ulong Address { get; internal set; }
-    public int TypeId { get; internal set; }
-    public int Size { get; internal set; }
-    public List<int> Children { get; }
-    public List<int> Parents { get; }
+    public ulong GetAddress(int nodeId) => _addresses[nodeId];
+    public int GetTypeId(int nodeId) => _typeIds[nodeId];
+    public int GetSize(int nodeId) => _sizes[nodeId];
+    public int GetChildCount(int nodeId) => _childCounts[nodeId];
+    public int GetParentCount(int nodeId) => _parentCounts[nodeId];
+    public ReadOnlySpan<int> GetChildren(int nodeId) => new ReadOnlySpan<int>(_children, _childStarts[nodeId], _childCounts[nodeId]);
+    public ReadOnlySpan<int> GetParents(int nodeId) => new ReadOnlySpan<int>(_parents, _parentStarts[nodeId], _parentCounts[nodeId]);
 }
 
 public sealed class TypeInfo
@@ -58,11 +75,26 @@ public sealed class TypeInfo
 
 public sealed class DominatorTree
 {
-    internal DominatorTree(int rootId, int[] immediateDominator, List<int>[] children, int[] dfsIn, int[] dfsOut, int[] nodeByDfsOrder, bool[] reachable)
+    private readonly int[] _childStarts;
+    private readonly int[] _childCounts;
+    private readonly int[] _children;
+
+    internal DominatorTree(
+        int rootId,
+        int[] immediateDominator,
+        int[] childStarts,
+        int[] childCounts,
+        int[] children,
+        int[] dfsIn,
+        int[] dfsOut,
+        int[] nodeByDfsOrder,
+        bool[] reachable)
     {
         RootId = rootId;
         ImmediateDominator = immediateDominator;
-        Children = children;
+        _childStarts = childStarts;
+        _childCounts = childCounts;
+        _children = children;
         DfsIn = dfsIn;
         DfsOut = dfsOut;
         NodeByDfsOrder = nodeByDfsOrder;
@@ -71,11 +103,11 @@ public sealed class DominatorTree
 
     public int RootId { get; }
     public int[] ImmediateDominator { get; }
-    public List<int>[] Children { get; }
     public int[] DfsIn { get; }
     public int[] DfsOut { get; }
     public int[] NodeByDfsOrder { get; }
     public bool[] Reachable { get; }
+    public ReadOnlySpan<int> GetChildren(int nodeId) => new ReadOnlySpan<int>(_children, _childStarts[nodeId], _childCounts[nodeId]);
 }
 
 public sealed class TypeSummary

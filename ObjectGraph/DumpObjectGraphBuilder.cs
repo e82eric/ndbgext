@@ -17,32 +17,30 @@ public static class DumpObjectGraphBuilder
         }
 
         log ??= TextWriter.Null;
-
         ClrRuntime[] runtimeArray = runtimes.Where(runtime => runtime != null).ToArray();
         if (runtimeArray.Length == 0)
         {
             throw new ArgumentException("At least one runtime is required.", nameof(runtimes));
         }
 
-        var nodes = new List<ObjectNode>();
+        var addresses = new List<ulong>();
+        var typeIds = new List<int>();
+        var sizes = new List<int>();
         var types = new List<TypeInfo>();
         var addressToNodeId = new Dictionary<ulong, int>(1_000_000);
         var typeIdsByKey = new Dictionary<TypeKey, int>();
-        var nodeInitialized = new List<bool>();
+        var sourceEdges = new List<int>(1_000_000);
+        var targetEdges = new List<int>(1_000_000);
         var stopwatch = Stopwatch.StartNew();
 
         int rootTypeId = GetOrCreateSyntheticTypeId("[GC Roots]", typeIdsByKey, types);
-        int rootId = nodes.Count;
-        nodes.Add(new ObjectNode(rootId, 0, rootTypeId, 0));
-        nodeInitialized.Add(true);
-
+        int rootId = CreateNode(0, rootTypeId, 0, addresses, typeIds, sizes, addressToNodeId);
         var segments = runtimeArray.SelectMany(runtime => runtime.Heap.Segments).OrderBy(segment => segment.Start).ToArray();
 
         log.WriteLine("{0,5:n1}s: Starting object graph build", stopwatch.Elapsed.TotalSeconds);
         long objectCount = 0;
         long objectBytes = 0;
         var uniqueChildren = new HashSet<int>();
-        long edgeCount = 0;
         foreach (ClrSegment segment in segments)
         {
             foreach (ClrObject obj in segment.EnumerateObjects())
@@ -52,15 +50,13 @@ public static class DumpObjectGraphBuilder
                     continue;
                 }
 
-                int nodeId = GetOrCreateNodeId(obj.Address, nodes, addressToNodeId, nodeInitialized);
-                if (!nodeInitialized[nodeId])
+                int nodeId = GetOrCreateNodeId(obj.Address, addresses, typeIds, sizes, addressToNodeId);
+                if (typeIds[nodeId] < 0)
                 {
                     int typeId = GetOrCreateTypeId(obj.Type, typeIdsByKey, types);
                     int size = checked((int)obj.Size);
-                    nodes[nodeId].Address = obj.Address;
-                    nodes[nodeId].TypeId = typeId;
-                    nodes[nodeId].Size = size;
-                    nodeInitialized[nodeId] = true;
+                    typeIds[nodeId] = typeId;
+                    sizes[nodeId] = size;
                     types[typeId].ExclusiveBytes += size;
                     types[typeId].ExclusiveCount++;
                     objectCount++;
@@ -75,74 +71,63 @@ public static class DumpObjectGraphBuilder
                         continue;
                     }
 
-                    int childId = GetOrCreateNodeId(childAddress, nodes, addressToNodeId, nodeInitialized);
+                    int childId = GetOrCreateNodeId(childAddress, addresses, typeIds, sizes, addressToNodeId);
                     if (!uniqueChildren.Add(childId))
                     {
                         continue;
                     }
 
-                    nodes[nodeId].Children.Add(childId);
-                    nodes[childId].Parents.Add(nodeId);
-                    edgeCount++;
+                    sourceEdges.Add(nodeId);
+                    targetEdges.Add(childId);
                 }
 
                 if ((objectCount % 1_000_000) == 0)
                 {
-                    log.WriteLine(
-                        "{0,5:n1}s: Scanned {1:n0} objects, size {2:n1} MB, types {3:n0}",
-                        stopwatch.Elapsed.TotalSeconds,
-                        objectCount,
-                        objectBytes / 1_000_000.0,
-                        types.Count);
+                    log.WriteLine("{0,5:n1}s: Scanned {1:n0} objects, size {2:n1} MB, types {3:n0}", stopwatch.Elapsed.TotalSeconds, objectCount, objectBytes / 1_000_000.0, types.Count);
                 }
             }
         }
 
-        log.WriteLine(
-            "{0,5:n1}s: Finished object scan. Objects={1:n0} Size={2:n1} MB Types={3:n0}",
-            stopwatch.Elapsed.TotalSeconds,
-            objectCount,
-            objectBytes / 1_000_000.0,
-            types.Count);
+        log.WriteLine("{0,5:n1}s: Finished object scan. Objects={1:n0} Size={2:n1} MB Types={3:n0}", stopwatch.Elapsed.TotalSeconds, objectCount, objectBytes / 1_000_000.0, types.Count);
 
         int unknownTypeId = GetOrCreateSyntheticTypeId("[Unknown]", typeIdsByKey, types);
-        for (int i = 0; i < nodeInitialized.Count; i++)
+        for (int i = 0; i < typeIds.Count; i++)
         {
-            if (!nodeInitialized[i])
+            if (typeIds[i] < 0)
             {
-                nodes[i].TypeId = unknownTypeId;
-                nodes[i].Size = 0;
+                typeIds[i] = unknownTypeId;
+                sizes[i] = 0;
                 types[unknownTypeId].ExclusiveCount++;
             }
         }
 
         log.WriteLine("{0,5:n1}s: Adding synthetic root edges", stopwatch.Elapsed.TotalSeconds);
-        AddRootEdges(runtimeArray, rootId, nodes, addressToNodeId, log);
-        log.WriteLine(
-            "{0,5:n1}s: Object graph ready. NodeCount={1:n0} EdgeCount={2:n0}",
-            stopwatch.Elapsed.TotalSeconds,
-            nodes.Count,
-            edgeCount + nodes[rootId].Children.Count);
+        AddRootEdges(runtimeArray, rootId, addressToNodeId, sourceEdges, targetEdges, log);
 
-        return new ObjectGraph(rootId, nodes, types);
+        PackedEdges packedEdges = PackEdges(typeIds.Count, sourceEdges, targetEdges);
+        log.WriteLine("{0,5:n1}s: Object graph ready. NodeCount={1:n0} EdgeCount={2:n0}", stopwatch.Elapsed.TotalSeconds, typeIds.Count, sourceEdges.Count);
+
+        return new ObjectGraph(rootId, addresses.ToArray(), typeIds.ToArray(), sizes.ToArray(), packedEdges.ChildStarts, packedEdges.ChildCounts, packedEdges.Children, packedEdges.ParentStarts, packedEdges.ParentCounts, packedEdges.Parents, types);
     }
 
-    private static int GetOrCreateNodeId(
-        ulong address,
-        List<ObjectNode> nodes,
-        Dictionary<ulong, int> addressToNodeId,
-        List<bool> nodeInitialized)
+    private static int CreateNode(ulong address, int typeId, int size, List<ulong> addresses, List<int> typeIds, List<int> sizes, Dictionary<ulong, int> addressToNodeId)
+    {
+        int nodeId = addresses.Count;
+        addresses.Add(address);
+        typeIds.Add(typeId);
+        sizes.Add(size);
+        addressToNodeId[address] = nodeId;
+        return nodeId;
+    }
+
+    private static int GetOrCreateNodeId(ulong address, List<ulong> addresses, List<int> typeIds, List<int> sizes, Dictionary<ulong, int> addressToNodeId)
     {
         if (addressToNodeId.TryGetValue(address, out int nodeId))
         {
             return nodeId;
         }
 
-        nodeId = nodes.Count;
-        addressToNodeId[address] = nodeId;
-        nodes.Add(new ObjectNode(nodeId, address, -1, 0));
-        nodeInitialized.Add(false);
-        return nodeId;
+        return CreateNode(address, -1, 0, addresses, typeIds, sizes, addressToNodeId);
     }
 
     private static bool IsInAnySegment(ClrSegment[] segments, ulong address)
@@ -170,12 +155,7 @@ public static class DumpObjectGraphBuilder
         return false;
     }
 
-    private static void AddRootEdges(
-        ClrRuntime[] runtimes,
-        int rootId,
-        List<ObjectNode> nodes,
-        Dictionary<ulong, int> addressToNodeId,
-        TextWriter log)
+    private static void AddRootEdges(ClrRuntime[] runtimes, int rootId, Dictionary<ulong, int> addressToNodeId, List<int> sourceEdges, List<int> targetEdges, TextWriter log)
     {
         var rootedNodes = new HashSet<int>();
         try
@@ -196,7 +176,7 @@ public static class DumpObjectGraphBuilder
                         foreach (ClrAppDomain domain in runtime.AppDomains)
                         {
                             ClrObject obj = field.ReadObject(domain);
-                            AddRootEdge(rootId, obj.Address, nodes, addressToNodeId, rootedNodes);
+                            AddRootEdge(rootId, obj.Address, addressToNodeId, rootedNodes, sourceEdges, targetEdges);
                         }
                     }
                 }
@@ -209,7 +189,7 @@ public static class DumpObjectGraphBuilder
                     continue;
                 }
 
-                AddRootEdge(rootId, root.Object.Address, nodes, addressToNodeId, rootedNodes);
+                AddRootEdge(rootId, root.Object.Address, addressToNodeId, rootedNodes, sourceEdges, targetEdges);
             }
         }
         catch (Exception ex) when (!(ex is OutOfMemoryException))
@@ -219,20 +199,57 @@ public static class DumpObjectGraphBuilder
         }
     }
 
-    private static void AddRootEdge(
-        int rootId,
-        ulong address,
-        List<ObjectNode> nodes,
-        Dictionary<ulong, int> addressToNodeId,
-        HashSet<int> rootedNodes)
+    private static void AddRootEdge(int rootId, ulong address, Dictionary<ulong, int> addressToNodeId, HashSet<int> rootedNodes, List<int> sourceEdges, List<int> targetEdges)
     {
         if (address == 0 || !addressToNodeId.TryGetValue(address, out int nodeId) || !rootedNodes.Add(nodeId))
         {
             return;
         }
 
-        nodes[rootId].Children.Add(nodeId);
-        nodes[nodeId].Parents.Add(rootId);
+        sourceEdges.Add(rootId);
+        targetEdges.Add(nodeId);
+    }
+
+    private static PackedEdges PackEdges(int nodeCount, List<int> sourceEdges, List<int> targetEdges)
+    {
+        int edgeCount = sourceEdges.Count;
+        int[] childCounts = new int[nodeCount];
+        int[] parentCounts = new int[nodeCount];
+        for (int i = 0; i < edgeCount; i++)
+        {
+            childCounts[sourceEdges[i]]++;
+            parentCounts[targetEdges[i]]++;
+        }
+
+        int[] childStarts = PrefixSum(childCounts);
+        int[] parentStarts = PrefixSum(parentCounts);
+        int[] children = new int[edgeCount];
+        int[] parents = new int[edgeCount];
+        int[] childCursor = (int[])childStarts.Clone();
+        int[] parentCursor = (int[])parentStarts.Clone();
+
+        for (int i = 0; i < edgeCount; i++)
+        {
+            int source = sourceEdges[i];
+            int target = targetEdges[i];
+            children[childCursor[source]++] = target;
+            parents[parentCursor[target]++] = source;
+        }
+
+        return new PackedEdges(childStarts, childCounts, children, parentStarts, parentCounts, parents);
+    }
+
+    private static int[] PrefixSum(int[] counts)
+    {
+        int[] starts = new int[counts.Length];
+        int next = 0;
+        for (int i = 0; i < counts.Length; i++)
+        {
+            starts[i] = next;
+            next += counts[i];
+        }
+
+        return starts;
     }
 
     private static int GetOrCreateTypeId(ClrType type, Dictionary<TypeKey, int> typeIdsByKey, List<TypeInfo> types)
@@ -263,6 +280,27 @@ public static class DumpObjectGraphBuilder
 
         return typeId;
     }
+
+    private readonly struct PackedEdges
+    {
+        public PackedEdges(int[] childStarts, int[] childCounts, int[] children, int[] parentStarts, int[] parentCounts, int[] parents)
+        {
+            ChildStarts = childStarts;
+            ChildCounts = childCounts;
+            Children = children;
+            ParentStarts = parentStarts;
+            ParentCounts = parentCounts;
+            Parents = parents;
+        }
+
+        public int[] ChildStarts { get; }
+        public int[] ChildCounts { get; }
+        public int[] Children { get; }
+        public int[] ParentStarts { get; }
+        public int[] ParentCounts { get; }
+        public int[] Parents { get; }
+    }
+
     private readonly struct TypeKey : IEquatable<TypeKey>
     {
         public TypeKey(string fullName, string name, string moduleName, bool isSynthetic)

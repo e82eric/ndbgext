@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace ObjectGraph;
@@ -6,7 +7,7 @@ public static class LengauerTarjanDominator
 {
     public static DominatorTree Compute(ObjectGraph graph, int rootId)
     {
-        int nodeCount = graph.Nodes.Count;
+        int nodeCount = graph.NodeCount;
         var dfsNumberByNode = new int[nodeCount];
         var nodeByDfs = new int[nodeCount + 1];
         var parent = new int[nodeCount + 1];
@@ -21,9 +22,10 @@ public static class LengauerTarjanDominator
         {
             int w = i;
             int wNodeId = nodeByDfs[w];
-            for (int predecessorIndex = 0; predecessorIndex < graph.Nodes[wNodeId].Parents.Count; predecessorIndex++)
+            ReadOnlySpan<int> parents = graph.GetParents(wNodeId);
+            for (int predecessorIndex = 0; predecessorIndex < parents.Length; predecessorIndex++)
             {
-                int predecessorNodeId = graph.Nodes[wNodeId].Parents[predecessorIndex];
+                int predecessorNodeId = parents[predecessorIndex];
                 int predecessorDfs = dfsNumberByNode[predecessorNodeId];
                 if (predecessorDfs == 0)
                 {
@@ -73,7 +75,7 @@ public static class LengauerTarjanDominator
             immediateDominator[nodeByDfs[i]] = nodeByDfs[idom[i]];
         }
 
-        var treeChildren = new List<int>[nodeCount];
+        int[] treeChildCounts = new int[nodeCount];
         var reachable = new bool[nodeCount];
         for (int i = 1; i <= dfsCount; i++)
         {
@@ -85,7 +87,17 @@ public static class LengauerTarjanDominator
             }
 
             int parentNodeId = immediateDominator[nodeId];
-            (treeChildren[parentNodeId] ??= new List<int>()).Add(nodeId);
+            treeChildCounts[parentNodeId]++;
+        }
+
+        int[] treeChildStarts = PrefixSum(treeChildCounts);
+        int[] treeChildren = new int[Math.Max(dfsCount - 1, 0)];
+        int[] cursor = (int[])treeChildStarts.Clone();
+        for (int i = 2; i <= dfsCount; i++)
+        {
+            int nodeId = nodeByDfs[i];
+            int parentNodeId = immediateDominator[nodeId];
+            treeChildren[cursor[parentNodeId]++] = nodeId;
         }
 
         var dfsIn = new int[nodeCount];
@@ -97,9 +109,9 @@ public static class LengauerTarjanDominator
         }
 
         var nodeByDfsOrder = new int[dfsCount];
-        AssignDominatorTreeIntervals(rootId, treeChildren, dfsIn, dfsOut, nodeByDfsOrder);
+        AssignDominatorTreeIntervals(rootId, treeChildStarts, treeChildCounts, treeChildren, dfsIn, dfsOut, nodeByDfsOrder);
 
-        return new DominatorTree(rootId, immediateDominator, treeChildren, dfsIn, dfsOut, nodeByDfsOrder, reachable);
+        return new DominatorTree(rootId, immediateDominator, treeChildStarts, treeChildCounts, treeChildren, dfsIn, dfsOut, nodeByDfsOrder, reachable);
     }
 
     private static int DepthFirstSearch(
@@ -133,8 +145,8 @@ public static class LengauerTarjanDominator
                 label[dfsCount] = dfsCount;
             }
 
-            List<int> children = graph.Nodes[state.NodeId].Children;
-            if (state.NextChildIndex < children.Count)
+            ReadOnlySpan<int> children = graph.GetChildren(state.NodeId);
+            if (state.NextChildIndex < children.Length)
             {
                 int childNodeId = children[state.NextChildIndex];
                 stack.Push(new TraversalState(state.NodeId, state.ParentDfs, state.NextChildIndex + 1));
@@ -150,7 +162,9 @@ public static class LengauerTarjanDominator
 
     private static void AssignDominatorTreeIntervals(
         int rootId,
-        List<int>[] treeChildren,
+        int[] treeChildStarts,
+        int[] treeChildCounts,
+        int[] treeChildren,
         int[] dfsIn,
         int[] dfsOut,
         int[] nodeByDfsOrder)
@@ -169,17 +183,31 @@ public static class LengauerTarjanDominator
                 next++;
             }
 
-            List<int> children = treeChildren[state.NodeId];
-            if (children != null && state.NextChildIndex < children.Count)
+            int start = treeChildStarts[state.NodeId];
+            int count = treeChildCounts[state.NodeId];
+            if (state.NextChildIndex < count)
             {
                 stack.Push(new TraversalState(state.NodeId, 0, state.NextChildIndex + 1));
-                stack.Push(new TraversalState(children[state.NextChildIndex], 0, 0));
+                stack.Push(new TraversalState(treeChildren[start + state.NextChildIndex], 0, 0));
             }
             else
             {
                 dfsOut[state.NodeId] = next - 1;
             }
         }
+    }
+
+    private static int[] PrefixSum(int[] counts)
+    {
+        int[] starts = new int[counts.Length];
+        int next = 0;
+        for (int i = 0; i < counts.Length; i++)
+        {
+            starts[i] = next;
+            next += counts[i];
+        }
+
+        return starts;
     }
 
     private static void Link(int parent, int child, int[] ancestor)

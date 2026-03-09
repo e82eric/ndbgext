@@ -76,14 +76,14 @@ public sealed class BuildObjectGraphCommand : DbgEngCommand
 
         long edgeCount = 0;
         long totalBytes = 0;
-        for (int i = 0; i < graph.Nodes.Count; i++)
+        for (int i = 0; i < graph.NodeCount; i++)
         {
-            edgeCount += graph.Nodes[i].Children.Count;
-            totalBytes += graph.Nodes[i].Size;
+            edgeCount += graph.GetChildCount(i);
+            totalBytes += graph.GetSize(i);
         }
 
         Console.WriteLine("ObjectGraph built.");
-        Console.WriteLine("Nodes: {0:n0}", graph.Nodes.Count);
+        Console.WriteLine("Nodes: {0:n0}", graph.NodeCount);
         Console.WriteLine("Edges: {0:n0}", edgeCount);
         Console.WriteLine("Types: {0:n0}", graph.Types.Count);
         Console.WriteLine("Total Size (bytes): {0:n0}", totalBytes);
@@ -216,10 +216,9 @@ public sealed class ReferredFromCommand : DbgEngCommand
         }
 
         var matches = new List<int>();
-        for (int i = 0; i < graph.Nodes.Count; i++)
+        for (int i = 0; i < graph.NodeCount; i++)
         {
-            ObjectGraph.ObjectNode node = graph.Nodes[i];
-            if (matchingTypes.Contains(node.TypeId) && dominatorTree.Reachable[i])
+            if (matchingTypes.Contains(graph.GetTypeId(i)) && dominatorTree.Reachable[i])
             {
                 matches.Add(i);
             }
@@ -234,12 +233,12 @@ public sealed class ReferredFromCommand : DbgEngCommand
         var parentStats = new Dictionary<int, (long ReferencedBytes, long InstanceCount)>();
         foreach (int nodeId in matches)
         {
-            ObjectGraph.ObjectNode node = graph.Nodes[nodeId];
-            int size = node.Size;
-            for (int i = 0; i < node.Parents.Count; i++)
+            int size = graph.GetSize(nodeId);
+            ReadOnlySpan<int> parents = graph.GetParents(nodeId);
+            for (int i = 0; i < parents.Length; i++)
             {
-                int parentId = node.Parents[i];
-                int parentTypeId = graph.Nodes[parentId].TypeId;
+                int parentId = parents[i];
+                int parentTypeId = graph.GetTypeId(parentId);
                 parentStats.TryGetValue(parentTypeId, out var current);
                 current.ReferencedBytes += size;
                 current.InstanceCount++;
@@ -410,10 +409,9 @@ public sealed class RefferedToTreeCommand : DbgEngCommand
         }
 
         List<int> currentLevel = new();
-        for (int i = 0; i < graph.Nodes.Count; i++)
+        for (int i = 0; i < graph.NodeCount; i++)
         {
-            ObjectGraph.ObjectNode node = graph.Nodes[i];
-            if (matchingTypes.Contains(node.TypeId) && dominatorTree.Reachable[i])
+            if (matchingTypes.Contains(graph.GetTypeId(i)) && dominatorTree.Reachable[i])
             {
                 currentLevel.Add(i);
             }
@@ -482,23 +480,23 @@ public sealed class RefferedToTreeCommand : DbgEngCommand
         var aggregates = new Dictionary<int, ChildAggregate>();
         foreach (int nodeId in currentNodes)
         {
-            ObjectGraph.ObjectNode node = graph.Nodes[nodeId];
-            for (int i = 0; i < node.Children.Count; i++)
+            ReadOnlySpan<int> children = graph.GetChildren(nodeId);
+            for (int i = 0; i < children.Length; i++)
             {
-                int childId = node.Children[i];
+                int childId = children[i];
                 if (!dominatorTree.Reachable[childId] || pathVisited.Contains(childId))
                 {
                     continue;
                 }
 
-                ObjectGraph.ObjectNode child = graph.Nodes[childId];
-                if (!aggregates.TryGetValue(child.TypeId, out ChildAggregate aggregate))
+                int childTypeId = graph.GetTypeId(childId);
+                if (!aggregates.TryGetValue(childTypeId, out ChildAggregate aggregate))
                 {
                     aggregate = new ChildAggregate();
-                    aggregates.Add(child.TypeId, aggregate);
+                    aggregates.Add(childTypeId, aggregate);
                 }
 
-                aggregate.Bytes += child.Size;
+                aggregate.Bytes += graph.GetSize(childId);
                 aggregate.Count++;
                 aggregate.NodeIds.Add(childId);
             }

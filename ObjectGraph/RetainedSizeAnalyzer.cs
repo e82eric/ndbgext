@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace ObjectGraph;
@@ -18,14 +19,14 @@ public static class RetainedSizeAnalyzer
 
     private static long[] ComputeRetainedBytesByObject(ObjectGraph graph, DominatorTree dominatorTree)
     {
-        var retained = new long[graph.Nodes.Count];
+        var retained = new long[graph.NodeCount];
         ComputeRetainedMetric(graph, dominatorTree, retained, useSize: true);
         return retained;
     }
 
     private static long[] ComputeRetainedCountsByObject(ObjectGraph graph, DominatorTree dominatorTree)
     {
-        var retained = new long[graph.Nodes.Count];
+        var retained = new long[graph.NodeCount];
         ComputeRetainedMetric(graph, dominatorTree, retained, useSize: false);
         return retained;
     }
@@ -42,27 +43,19 @@ public static class RetainedSizeAnalyzer
             if (!state.PostOrder)
             {
                 stack.Push(new TraversalState(state.NodeId, true));
-                List<int> children = dominatorTree.Children[state.NodeId];
-                if (children == null)
-                {
-                    continue;
-                }
-
-                for (int i = 0; i < children.Count; i++)
+                ReadOnlySpan<int> children = dominatorTree.GetChildren(state.NodeId);
+                for (int i = 0; i < children.Length; i++)
                 {
                     stack.Push(new TraversalState(children[i], false));
                 }
             }
             else
             {
-                long value = state.NodeId == rootId ? 0 : (useSize ? graph.Nodes[state.NodeId].Size : 1);
-                List<int> children = dominatorTree.Children[state.NodeId];
-                if (children != null)
+                long value = state.NodeId == rootId ? 0 : (useSize ? graph.GetSize(state.NodeId) : 1);
+                ReadOnlySpan<int> children = dominatorTree.GetChildren(state.NodeId);
+                for (int i = 0; i < children.Length; i++)
                 {
-                    for (int i = 0; i < children.Count; i++)
-                    {
-                        value += retained[children[i]];
-                    }
+                    value += retained[children[i]];
                 }
 
                 retained[state.NodeId] = value;
@@ -92,10 +85,9 @@ public static class RetainedSizeAnalyzer
         long[] retainedCountByObject,
         List<TypeSummary> typeSummaries)
     {
-        for (int i = 0; i < graph.Nodes.Count; i++)
+        for (int i = 0; i < graph.NodeCount; i++)
         {
-            ObjectNode node = graph.Nodes[i];
-            TypeSummary summary = typeSummaries[node.TypeId];
+            TypeSummary summary = typeSummaries[graph.GetTypeId(i)];
             summary.RetainedBytes += retainedBytesByObject[i];
             summary.RetainedCount += retainedCountByObject[i];
         }
@@ -114,13 +106,13 @@ public static class RetainedSizeAnalyzer
         for (int order = 0; order < reachableCount; order++)
         {
             int nodeId = dominatorTree.NodeByDfsOrder[order];
-            ObjectNode node = graph.Nodes[nodeId];
-            long size = nodeId == dominatorTree.RootId ? 0 : node.Size;
+            long size = nodeId == dominatorTree.RootId ? 0 : graph.GetSize(nodeId);
             long count = nodeId == dominatorTree.RootId ? 0 : 1;
             sizePrefix[order + 1] = sizePrefix[order] + size;
             countPrefix[order + 1] = countPrefix[order] + count;
 
-            (intervalsByType[node.TypeId] ??= new List<Interval>()).Add(new Interval(dominatorTree.DfsIn[nodeId], dominatorTree.DfsOut[nodeId]));
+            int typeId = graph.GetTypeId(nodeId);
+            (intervalsByType[typeId] ??= new List<Interval>()).Add(new Interval(dominatorTree.DfsIn[nodeId], dominatorTree.DfsOut[nodeId]));
         }
 
         for (int typeId = 0; typeId < intervalsByType.Length; typeId++)
