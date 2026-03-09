@@ -30,6 +30,10 @@ public static unsafe class Extension
         Console.WriteLine("savemodule [modulename]");
         Console.WriteLine("inclusivebytes -n [N]");
         Console.WriteLine("buildmemorygraph");
+        Console.WriteLine("buildobjectgraph");
+        Console.WriteLine("retainedbytestat [--min-retained-bytes N]");
+        Console.WriteLine("referredfrom <TypeName> [--top N]");
+        Console.WriteLine("refferedtotree <TypeName> [--levels N]");
         Console.WriteLine("totaltypebytes");
         Console.WriteLine("typebytes <TypeName> [--max-type-roots N] [--max-tree-nodes N] [--max-depth N] [--quiet]");
         
@@ -478,6 +482,78 @@ public static unsafe class Extension
         catch (Exception e)
         {
             Console.Error.WriteLine("Failed to run buildmemorygraph command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buildobjectgraph", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int BuildObjectGraph(nint pUnknown, nint args)
+    {
+        try
+        {
+            BuildObjectGraphCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("Failed to run buildobjectgraph command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "retainedbytestat", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int RetainedByteStat(nint pUnknown, nint args)
+    {
+        try
+        {
+            RetainedByteStatCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("Failed to run retainedbytestat command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "referredfrom", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int ReferredFrom(nint pUnknown, nint args)
+    {
+        try
+        {
+            ReferredFromCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("Failed to run referredfrom command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "refferedtotree", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int RefferedToTree(nint pUnknown, nint args)
+    {
+        try
+        {
+            RefferedToTreeCommand cmd = new(pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("Failed to run refferedtotree command.");
             Console.Error.WriteLine(e);
         }
 

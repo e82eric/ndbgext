@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>ObjectGraph</RootNamespace>
+    <AssemblyName>ObjectGraph</AssemblyName>
+    <Description>Object graph and dominator-based retained-size analysis for .NET dumps.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.11.4" />
+    <PackageReference Include="Microsoft.Diagnostics.Runtime" Version="4.0.0-beta.24463.1" />
+  </ItemGroup>
+</Project>

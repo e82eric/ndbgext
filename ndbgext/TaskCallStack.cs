@@ -433,9 +433,7 @@ public class DumpAsyncCommand
                         {
                             if (visitedObjects.Add(stackObject.Address))
                             {
-                                ClrObject joinableTaskObject = stackObject.Type is null
-                                    ? runtime.Heap.GetObject(stackObject.Address)
-                                    : runtime.Heap.GetObject(stackObject.Address, stackObject.Type);
+                                ClrObject joinableTaskObject = runtime.Heap.GetObject(stackObject.Address);
                                 int state = joinableTaskObject.ReadField<int>("state");
                                 if ((state & 0x10) == 0x10)
                                 {
@@ -653,12 +651,16 @@ internal static class Utilities
             .Where(obj => string.Equals(obj.Type?.Name, typeName, StringComparison.Ordinal));
     }
     
-    public static ClrObject GetObject(this ClrHeap _, ulong objRef, ClrType type)
+    public static ClrObject GetObject(this ClrHeap heap, ulong objRef, ClrType type)
     {
+        if (heap is null)
+            throw new ArgumentNullException(nameof(heap));
+
         if (type is null)
             throw new ArgumentNullException(nameof(type));
 
-        return new(objRef, type);
+        ClrObject result = heap.GetObject(objRef);
+        return result.Type == type ? result : default;
     }
 }
 public sealed class NetCoreDumpAsyncCommand
