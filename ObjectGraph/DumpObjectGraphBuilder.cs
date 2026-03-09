@@ -107,7 +107,7 @@ public static class DumpObjectGraphBuilder
         PackedEdges packedEdges = PackEdges(typeIds.Count, sourceEdges, targetEdges);
         log.WriteLine("{0,5:n1}s: Object graph ready. NodeCount={1:n0} EdgeCount={2:n0}", stopwatch.Elapsed.TotalSeconds, typeIds.Count, sourceEdges.Count);
 
-        return new ObjectGraph(rootId, addresses.ToArray(), typeIds.ToArray(), sizes.ToArray(), packedEdges.ChildStarts, packedEdges.ChildCounts, packedEdges.Children, packedEdges.ParentStarts, packedEdges.ParentCounts, packedEdges.Parents, types);
+        return new ObjectGraph(rootId, typeIds.ToArray(), sizes.ToArray(), packedEdges.ChildStarts, packedEdges.ChildCounts, packedEdges.Children, packedEdges.ParentStarts, packedEdges.ParentCounts, packedEdges.Parents, types);
     }
 
     private static int CreateNode(ulong address, int typeId, int size, List<ulong> addresses, List<int> typeIds, List<int> sizes, Dictionary<ulong, int> addressToNodeId)

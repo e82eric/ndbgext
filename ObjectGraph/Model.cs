@@ -5,7 +5,6 @@ namespace ObjectGraph;
 
 public sealed class ObjectGraph
 {
-    private readonly ulong[] _addresses;
     private readonly int[] _typeIds;
     private readonly int[] _sizes;
     private readonly int[] _childStarts;
@@ -17,7 +16,6 @@ public sealed class ObjectGraph
 
     internal ObjectGraph(
         int rootId,
-        ulong[] addresses,
         int[] typeIds,
         int[] sizes,
         int[] childStarts,
@@ -29,7 +27,6 @@ public sealed class ObjectGraph
         List<TypeInfo> types)
     {
         RootId = rootId;
-        _addresses = addresses;
         _typeIds = typeIds;
         _sizes = sizes;
         _childStarts = childStarts;
@@ -44,7 +41,6 @@ public sealed class ObjectGraph
     public int RootId { get; }
     public int NodeCount => _typeIds.Length;
     public IReadOnlyList<TypeInfo> Types { get; }
-    public ulong GetAddress(int nodeId) => _addresses[nodeId];
     public int GetTypeId(int nodeId) => _typeIds[nodeId];
     public int GetSize(int nodeId) => _sizes[nodeId];
     public int GetChildCount(int nodeId) => _childCounts[nodeId];
