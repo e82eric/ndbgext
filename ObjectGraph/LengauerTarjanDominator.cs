@@ -22,10 +22,8 @@ public static class LengauerTarjanDominator
         {
             int w = i;
             int wNodeId = nodeByDfs[w];
-            ReadOnlySpan<int> parents = graph.GetParents(wNodeId);
-            for (int predecessorIndex = 0; predecessorIndex < parents.Length; predecessorIndex++)
+            foreach (int predecessorNodeId in graph.EnumerateParents(wNodeId))
             {
-                int predecessorNodeId = parents[predecessorIndex];
                 int predecessorDfs = dfsNumberByNode[predecessorNodeId];
                 if (predecessorDfs == 0)
                 {
@@ -125,12 +123,12 @@ public static class LengauerTarjanDominator
     {
         int dfsCount = 0;
         var stack = new Stack<TraversalState>();
-        stack.Push(new TraversalState(rootId, 0, 0));
+        stack.Push(new TraversalState(rootId, 0, default, false));
 
         while (stack.Count > 0)
         {
             TraversalState state = stack.Pop();
-            if (state.NextChildIndex == 0)
+            if (!state.Initialized)
             {
                 if (dfsNumberByNode[state.NodeId] != 0)
                 {
@@ -143,16 +141,17 @@ public static class LengauerTarjanDominator
                 parent[dfsCount] = state.ParentDfs;
                 semi[dfsCount] = dfsCount;
                 label[dfsCount] = dfsCount;
+                state = new TraversalState(state.NodeId, state.ParentDfs, graph.EnumerateChildren(state.NodeId).GetEnumerator(), true);
             }
 
-            ReadOnlySpan<int> children = graph.GetChildren(state.NodeId);
-            if (state.NextChildIndex < children.Length)
+            ObjectGraph.EdgeEnumerator enumerator = state.Enumerator;
+            if (enumerator.MoveNext())
             {
-                int childNodeId = children[state.NextChildIndex];
-                stack.Push(new TraversalState(state.NodeId, state.ParentDfs, state.NextChildIndex + 1));
+                int childNodeId = enumerator.Current;
+                stack.Push(new TraversalState(state.NodeId, state.ParentDfs, enumerator, true));
                 if (dfsNumberByNode[childNodeId] == 0)
                 {
-                    stack.Push(new TraversalState(childNodeId, dfsNumberByNode[state.NodeId], 0));
+                    stack.Push(new TraversalState(childNodeId, dfsNumberByNode[state.NodeId], default, false));
                 }
             }
         }
@@ -170,12 +169,12 @@ public static class LengauerTarjanDominator
         int[] nodeByDfsOrder)
     {
         int next = 0;
-        var stack = new Stack<TraversalState>();
-        stack.Push(new TraversalState(rootId, 0, 0));
+        var stack = new Stack<IntervalTraversalState>();
+        stack.Push(new IntervalTraversalState(rootId, 0));
 
         while (stack.Count > 0)
         {
-            TraversalState state = stack.Pop();
+            IntervalTraversalState state = stack.Pop();
             if (state.NextChildIndex == 0)
             {
                 dfsIn[state.NodeId] = next;
@@ -187,8 +186,8 @@ public static class LengauerTarjanDominator
             int count = treeChildCounts[state.NodeId];
             if (state.NextChildIndex < count)
             {
-                stack.Push(new TraversalState(state.NodeId, 0, state.NextChildIndex + 1));
-                stack.Push(new TraversalState(treeChildren[start + state.NextChildIndex], 0, 0));
+                stack.Push(new IntervalTraversalState(state.NodeId, state.NextChildIndex + 1));
+                stack.Push(new IntervalTraversalState(treeChildren[start + state.NextChildIndex], 0));
             }
             else
             {
@@ -244,15 +243,29 @@ public static class LengauerTarjanDominator
 
     private readonly struct TraversalState
     {
-        public TraversalState(int nodeId, int parentDfs, int nextChildIndex)
+        public TraversalState(int nodeId, int parentDfs, ObjectGraph.EdgeEnumerator enumerator, bool initialized)
         {
             NodeId = nodeId;
             ParentDfs = parentDfs;
-            NextChildIndex = nextChildIndex;
+            Enumerator = enumerator;
+            Initialized = initialized;
         }
 
         public int NodeId { get; }
         public int ParentDfs { get; }
+        public ObjectGraph.EdgeEnumerator Enumerator { get; }
+        public bool Initialized { get; }
+    }
+
+    private readonly struct IntervalTraversalState
+    {
+        public IntervalTraversalState(int nodeId, int nextChildIndex)
+        {
+            NodeId = nodeId;
+            NextChildIndex = nextChildIndex;
+        }
+
+        public int NodeId { get; }
         public int NextChildIndex { get; }
     }
 }

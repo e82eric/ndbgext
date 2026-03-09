@@ -107,7 +107,7 @@ public static class DumpObjectGraphBuilder
         PackedEdges packedEdges = PackEdges(typeIds.Count, sourceEdges, targetEdges);
         log.WriteLine("{0,5:n1}s: Object graph ready. NodeCount={1:n0} EdgeCount={2:n0}", stopwatch.Elapsed.TotalSeconds, typeIds.Count, sourceEdges.Count);
 
-        return new ObjectGraph(rootId, typeIds.ToArray(), sizes.ToArray(), packedEdges.ChildStarts, packedEdges.ChildCounts, packedEdges.Children, packedEdges.ParentStarts, packedEdges.ParentCounts, packedEdges.Parents, types);
+        return new ObjectGraph(rootId, typeIds.ToArray(), sizes.ToArray(), packedEdges.ChildOffsets, packedEdges.ChildCounts, packedEdges.ChildData, packedEdges.ParentOffsets, packedEdges.ParentCounts, packedEdges.ParentData, types);
     }
 
     private static int CreateNode(ulong address, int typeId, int size, List<ulong> addresses, List<int> typeIds, List<int> sizes, Dictionary<ulong, int> addressToNodeId)
@@ -236,7 +236,9 @@ public static class DumpObjectGraphBuilder
             parents[parentCursor[target]++] = source;
         }
 
-        return new PackedEdges(childStarts, childCounts, children, parentStarts, parentCounts, parents);
+        byte[] childData = CompressAdjacency(children, childStarts, childCounts);
+        byte[] parentData = CompressAdjacency(parents, parentStarts, parentCounts);
+        return new PackedEdges(childStarts, childCounts, childData, parentStarts, parentCounts, parentData);
     }
 
     private static int[] PrefixSum(int[] counts)
@@ -283,22 +285,41 @@ public static class DumpObjectGraphBuilder
 
     private readonly struct PackedEdges
     {
-        public PackedEdges(int[] childStarts, int[] childCounts, int[] children, int[] parentStarts, int[] parentCounts, int[] parents)
+        public PackedEdges(int[] childOffsets, int[] childCounts, byte[] childData, int[] parentOffsets, int[] parentCounts, byte[] parentData)
         {
-            ChildStarts = childStarts;
+            ChildOffsets = childOffsets;
             ChildCounts = childCounts;
-            Children = children;
-            ParentStarts = parentStarts;
+            ChildData = childData;
+            ParentOffsets = parentOffsets;
             ParentCounts = parentCounts;
-            Parents = parents;
+            ParentData = parentData;
         }
 
-        public int[] ChildStarts { get; }
+        public int[] ChildOffsets { get; }
         public int[] ChildCounts { get; }
-        public int[] Children { get; }
-        public int[] ParentStarts { get; }
+        public byte[] ChildData { get; }
+        public int[] ParentOffsets { get; }
         public int[] ParentCounts { get; }
-        public int[] Parents { get; }
+        public byte[] ParentData { get; }
+    }
+
+    private static byte[] CompressAdjacency(int[] edges, int[] starts, int[] counts)
+    {
+        using var stream = new MemoryStream(edges.Length * 3);
+        int[] originalStarts = (int[])starts.Clone();
+        int[] offsets = starts;
+        for (int nodeId = 0; nodeId < counts.Length; nodeId++)
+        {
+            offsets[nodeId] = (int)stream.Position;
+            int start = originalStarts[nodeId];
+            int count = counts[nodeId];
+            for (int i = 0; i < count; i++)
+            {
+                ObjectGraph.WriteCompressedInt(stream, edges[start + i] - nodeId);
+            }
+        }
+
+        return stream.ToArray();
     }
 
     private readonly struct TypeKey : IEquatable<TypeKey>

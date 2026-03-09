@@ -234,10 +234,8 @@ public sealed class ReferredFromCommand : DbgEngCommand
         foreach (int nodeId in matches)
         {
             int size = graph.GetSize(nodeId);
-            ReadOnlySpan<int> parents = graph.GetParents(nodeId);
-            for (int i = 0; i < parents.Length; i++)
+            foreach (int parentId in graph.EnumerateParents(nodeId))
             {
-                int parentId = parents[i];
                 int parentTypeId = graph.GetTypeId(parentId);
                 parentStats.TryGetValue(parentTypeId, out var current);
                 current.ReferencedBytes += size;
@@ -480,10 +478,8 @@ public sealed class RefferedToTreeCommand : DbgEngCommand
         var aggregates = new Dictionary<int, ChildAggregate>();
         foreach (int nodeId in currentNodes)
         {
-            ReadOnlySpan<int> children = graph.GetChildren(nodeId);
-            for (int i = 0; i < children.Length; i++)
+            foreach (int childId in graph.EnumerateChildren(nodeId))
             {
-                int childId = children[i];
                 if (!dominatorTree.Reachable[childId] || pathVisited.Contains(childId))
                 {
                     continue;
