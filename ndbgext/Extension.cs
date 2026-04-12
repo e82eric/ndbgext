@@ -62,8 +62,6 @@ public static unsafe class Extension
 
         Console.WriteLine("clruniqstack");
         Console.WriteLine("taskcallstack");
-        Console.WriteLine("threadpoolqueue (tpq) -detail");
-        Console.WriteLine("threadpoolstats (tps)");
         Console.WriteLine("dumpconcurrentdict (dcd) | -list [containsFilter] | -count");
         Console.WriteLine("dumpconcurrentqueue (dcq) | -list [containsFilter]");
         Console.WriteLine("getmetodname (gmn) [methodptr]");
@@ -72,14 +70,10 @@ public static unsafe class Extension
         Console.WriteLine("decompilemethod -sp [address] | -ip [instructionPointer] | -md [methodDesc]");
         Console.WriteLine("decompiletype [address] | -ad [address] | -nm [typeName] | -ip [ip] | -md [token] | -mt [methodTable]");
         Console.WriteLine("savemodule [modulename]");
-        Console.WriteLine("inclusivebytes -n [N]");
-        Console.WriteLine("buildmemorygraph");
         Console.WriteLine("buildobjectgraph");
         Console.WriteLine("retainedbytestat [--min-retained-bytes N]");
         Console.WriteLine("referredfrom <TypeName> [--top N]");
         Console.WriteLine("refferedtotree <TypeName> [--levels N]");
-        Console.WriteLine("totaltypebytes");
-        Console.WriteLine("typebytes <TypeName> [--max-type-roots N] [--max-tree-nodes N] [--max-depth N] [--quiet]");
         Console.WriteLine("tquery [-short] [-debug] (-mt|-addr|-array|-implements) <address> (select|where)");
         Console.WriteLine();
         Console.WriteLine("Use !til.help <command> for detailed help on a specific command.");
@@ -387,64 +381,6 @@ public static unsafe class Extension
         return 0;
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "tpq", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int Tps(nint pUnknown, nint args)
-    {
-        return _ThreadPoolQueue(pUnknown, args);
-    }
-
-    [UnmanagedCallersOnly(EntryPoint = "threadpoolqueue", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int ThreadPoolQueue(nint pUnknown, nint args)
-    {
-        return _ThreadPoolQueue(pUnknown, args);
-    }
-
-    private static readonly ThreadPool _threadPool = new(new ConcurrentQueue());
-    private static int _ThreadPoolQueue(nint pUnknown, nint args)
-    {
-        try
-        {
-            ThreadPoolCommand cmd = new(pUnknown, _threadPool);
-            var arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"Failed to run {nameof(ThreadPoolCommand)} command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-
-    [UnmanagedCallersOnly(EntryPoint = "threadpoolstats", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int ThreadPoolStats(nint pUnknown, nint args)
-    {
-        return _ThreadPoolStats(pUnknown, args);
-    }
-
-    [UnmanagedCallersOnly(EntryPoint = "tps", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int TPS(nint pUnknown, nint args)
-    {
-        return _ThreadPoolStats(pUnknown, args);
-    }
-    private static int _ThreadPoolStats(nint pUnknown, nint args)
-    {
-        try
-        {
-            ThreadPoolCommand cmd = new(pUnknown, _threadPool);
-            var arguments = Marshal.PtrToStringAnsi(args);
-            cmd.RunRunning(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"Failed to run {nameof(ThreadPoolCommand)} command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-
     [UnmanagedCallersOnly(EntryPoint = "getmethodname", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int GetMethodName(nint pUnknown, nint args)
     {
@@ -718,47 +654,6 @@ public static unsafe class Extension
         return 0;
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "inclusivebytes", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int inclusivebytes(nint pUnknown, nint args)
-    {
-        return _inclusivebytes(pUnknown, args);
-    }
-
-    private static int _inclusivebytes(nint pUnknown, nint args)
-    {
-        try
-        {
-            InclusiveBytesCommand cmd = new(pUnknown);
-            string? arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"Failed to run {nameof(InclusiveBytesCommand)} command");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-
-    [UnmanagedCallersOnly(EntryPoint = "buildmemorygraph", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int BuildMemoryGraph(nint pUnknown, nint args)
-    {
-        try
-        {
-            BuildMemoryGraphCommand cmd = new(pUnknown);
-            string? arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine("Failed to run buildmemorygraph command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-
     [UnmanagedCallersOnly(EntryPoint = "buildobjectgraph", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int BuildObjectGraph(nint pUnknown, nint args)
     {
@@ -831,39 +726,4 @@ public static unsafe class Extension
         return 0;
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "totaltypebytes", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int TotalTypeBytes(nint pUnknown, nint args)
-    {
-        try
-        {
-            TotalTypeBytesCommand cmd = new(pUnknown);
-            string? arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine("Failed to run totaltypebytes command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
-
-    [UnmanagedCallersOnly(EntryPoint = "typebytes", CallConvs = new[] { typeof(CallConvStdcall) })]
-    public static int TypeBytes(nint pUnknown, nint args)
-    {
-        try
-        {
-            TypeBytesCommand cmd = new(pUnknown);
-            string? arguments = Marshal.PtrToStringAnsi(args);
-            cmd.Run(arguments ?? "");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine("Failed to run typebytes command.");
-            Console.Error.WriteLine(e);
-        }
-
-        return 0;
-    }
 }

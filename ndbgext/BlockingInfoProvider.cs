@@ -491,6 +491,13 @@ public class BlockingInfoProvider
                 yield return ptr;
     }
 }
+
+public enum ThreadRoot
+{
+    Task,
+    WorkItem
+}
+
 public class BlockingInfo
 {
     public ClrStackFrame Frame { get; set; }
