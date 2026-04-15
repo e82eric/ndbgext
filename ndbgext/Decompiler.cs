@@ -32,14 +32,22 @@ public class Decompiler
     {
         if (TryDecompileMethod(runtime, method, out var syntaxTree, out var decompiler))
         {
-            var stringWriter = new StringWriter();
-            var tokenWriter = TokenWriter.CreateWriterThatSetsLocationsInAST(stringWriter, "  ");
-            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(tokenWriter, _settings.CSharpFormattingOptions));
-            var sequencePoints = decompiler.CreateSequencePoints(syntaxTree);
-            var sw = new StringWriter();
-            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(sw, _settings.CSharpFormattingOptions));
-            var decompiledMethod = sw.ToString();
+            var decompiledMethod = RenderSyntaxTree(syntaxTree);
             var split = decompiledMethod.Split('\n');
+            Dictionary<ILFunction, List<SequencePoint>>? sequencePoints = null;
+
+            try
+            {
+                var stringWriter = new StringWriter();
+                var tokenWriter = TokenWriter.CreateWriterThatSetsLocationsInAST(stringWriter, "  ");
+                syntaxTree.AcceptVisitor(new CSharpOutputVisitor(tokenWriter, _settings.CSharpFormattingOptions));
+                sequencePoints = decompiler.CreateSequencePoints(syntaxTree);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("WARN: Could not map IL offsets to source lines: {0}", e.Message);
+                return decompiledMethod;
+            }
 
             var lineMatches = new List<LineMatch>(ilOffsets.Count);
             if (sequencePoints != null && sequencePoints.Count > 0)
@@ -84,6 +92,12 @@ public class Decompiler
             return decompiledMethod;
         }
 
+        if (TryDecompileMethodFromType(runtime, method, out var typeDecompiledMethod))
+        {
+            Console.WriteLine("WARN: Fell back to type-level decompilation for method {0}.{1}", method.Type?.Name, method.Name);
+            return typeDecompiledMethod;
+        }
+
         Console.WriteLine("WARN: Method not found");
         return string.Empty;
     }
@@ -92,7 +106,12 @@ public class Decompiler
     {
         if (TryDecompileMethod(runtime, method, out var syntaxTree, out _))
         {
-            return syntaxTree.ToString();
+            return RenderSyntaxTree(syntaxTree);
+        }
+        if (TryDecompileMethodFromType(runtime, method, out var typeDecompiledMethod))
+        {
+            Console.WriteLine("WARN: Fell back to type-level decompilation for method {0}.{1}", method.Type?.Name, method.Name);
+            return typeDecompiledMethod;
         }
         Console.WriteLine("WARN: Method not found");
         return string.Empty;
@@ -102,31 +121,33 @@ public class Decompiler
     {
         syntaxTree = null;
         decompiler = null;
-        if (method.Type.Module.Name == null)
+        if (method.Type?.Module?.Name == null)
         {
             return false;
         }
 
         Console.WriteLine("Type: {0}", method.Type.Name);
-        
-        PEFile peFile = GetPeFile(runtime, method.Type.Module.Name, method.Type.Module.ImageBase);
 
+        var peFile = GetPeFile(runtime, method.Type.Module.Name, method.Type.Module.ImageBase);
         decompiler = GetDecompiler(runtime, method.Type.Module.Name, peFile, _settings);
-        var typeDefinition = decompiler.TypeSystem.MainModule.Compilation.GetAllTypeDefinitions()
-            .FirstOrDefault(t => t.MetadataToken.GetHashCode() == method.Type.MetadataToken);
-        
-        var ilSpyMethod = typeDefinition?.Methods.FirstOrDefault(m => m.MetadataToken.GetHashCode() == method.MetadataToken);
-        if (ilSpyMethod != null)
+
+        var ilSpyMethod = FindMethodDefinition(decompiler, method);
+        if (ilSpyMethod == null)
         {
-            var stringWriter = new StringWriter();
-            var tokenWriter = TokenWriter.CreateWriterThatSetsLocationsInAST(stringWriter, "  ");
-            syntaxTree = decompiler.Decompile(ilSpyMethod.MetadataToken);
-            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(tokenWriter, _settings.CSharpFormattingOptions));
-            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(stringWriter, _settings.CSharpFormattingOptions));
-            return true;
+            return false;
         }
 
-        return false;
+        try
+        {
+            syntaxTree = decompiler.Decompile(ilSpyMethod.MetadataToken);
+            return true;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("WARN: Method-level decompilation failed for {0}.{1}: {2}", method.Type?.Name, method.Name, e.Message);
+            syntaxTree = null;
+            return false;
+        }
     }
 
     private CSharpDecompiler GetDecompiler(ClrRuntime runtime, string moduleName, PEFile peFile, DecompilerSettings settings)
@@ -216,5 +237,71 @@ public class Decompiler
     {
         public int LineNumber;
         public bool MethodNameMatches;
+    }
+
+    private IMethod? FindMethodDefinition(CSharpDecompiler decompiler, ClrMethod method)
+    {
+        var allTypeDefinitions = decompiler.TypeSystem.MainModule.Compilation.GetAllTypeDefinitions();
+        var typeDefinition = allTypeDefinitions.FirstOrDefault(t => t.MetadataToken.GetHashCode() == method.Type.MetadataToken);
+        typeDefinition ??= allTypeDefinitions.FirstOrDefault(t =>
+            string.Equals(t.FullName, method.Type.Name, StringComparison.Ordinal));
+
+        if (typeDefinition == null)
+        {
+            return null;
+        }
+
+        var methodDefinition = typeDefinition.Methods.FirstOrDefault(m => m.MetadataToken.GetHashCode() == method.MetadataToken);
+        methodDefinition ??= typeDefinition.Methods.FirstOrDefault(m =>
+            string.Equals(m.Name, method.Name, StringComparison.Ordinal));
+        return methodDefinition;
+    }
+
+    private string RenderSyntaxTree(SyntaxTree syntaxTree)
+    {
+        var sw = new StringWriter();
+        syntaxTree.AcceptVisitor(new CSharpOutputVisitor(sw, _settings.CSharpFormattingOptions));
+        return sw.ToString();
+    }
+
+    private bool TryDecompileMethodFromType(ClrRuntime runtime, ClrMethod method, [NotNullWhen(true)] out string? code)
+    {
+        code = null;
+        if (method.Type?.Module?.Name == null || method.Type?.Name == null || string.IsNullOrEmpty(method.Name))
+        {
+            return false;
+        }
+
+        try
+        {
+            var typeCode = DecompileType(runtime, method.Type.Module.Name, method.Type);
+            if (string.IsNullOrWhiteSpace(typeCode))
+            {
+                return false;
+            }
+
+            code = MarkMethodInTypeDecompilation(typeCode, method.Name);
+            return true;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("WARN: Type-level decompilation failed for {0}.{1}: {2}", method.Type.Name, method.Name, e.Message);
+            return false;
+        }
+    }
+
+    private static string MarkMethodInTypeDecompilation(string typeCode, string methodName)
+    {
+        var lines = typeCode.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].Contains(methodName, StringComparison.Ordinal))
+            {
+                lines[i] = ">>" + lines[i];
+                break;
+            }
+        }
+
+        return string.Join("\n", lines);
     }
 }

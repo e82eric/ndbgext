@@ -139,6 +139,23 @@ Decompiles a managed method to C# source using ILSpy.
 
 ---
 
+#### clrstacksource
+
+Walks managed stacks and prints decompiled C# source for each frame.
+
+```
+!til.clrstacksource
+!til.clrstacksource -tid <osThreadIdHex>
+```
+
+| Option | Description |
+|--------|-------------|
+| `-tid <osThreadIdHex>` | Restrict output to a single OS thread id. Accepts plain hex or `0x`-prefixed values. |
+
+For each matching thread, prints the thread id, every stack frame, and the decompiled source for each managed frame. When IL-to-source mapping is available, the currently executing line is marked in the decompiled output. Native/runtime frames are shown with a placeholder instead of source.
+
+---
+
 #### decompiletype
 
 Decompiles an entire managed type to C# source using ILSpy.

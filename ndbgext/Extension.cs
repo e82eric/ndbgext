@@ -30,6 +30,12 @@ public static unsafe class Extension
             return 0;
         }
 
+        if (string.Equals(arguments, "clrstacksource", StringComparison.OrdinalIgnoreCase))
+        {
+            PrintClrStackSourceHelp();
+            return 0;
+        }
+
         if (string.Equals(arguments, "decompiletype", StringComparison.OrdinalIgnoreCase))
         {
             PrintDecompileTypeHelp();
@@ -60,21 +66,22 @@ public static unsafe class Extension
             return 0;
         }
 
-        Console.WriteLine("clruniqstack");
-        Console.WriteLine("taskcallstack");
-        Console.WriteLine("dumpconcurrentdict (dcd) | -list [containsFilter] | -count");
-        Console.WriteLine("dumpconcurrentqueue (dcq) | -list [containsFilter]");
-        Console.WriteLine("getmetodname (gmn) [methodptr]");
-        Console.WriteLine("tasks (tks) -detail [state]");
-        Console.WriteLine("blockinginfo");
-        Console.WriteLine("decompilemethod -sp [address] | -ip [instructionPointer] | -md [methodDesc]");
-        Console.WriteLine("decompiletype [address] | -ad [address] | -nm [typeName] | -ip [ip] | -md [token] | -mt [methodTable]");
-        Console.WriteLine("savemodule [modulename]");
-        Console.WriteLine("buildobjectgraph");
-        Console.WriteLine("retainedbytestat [--min-retained-bytes N]");
-        Console.WriteLine("referredfrom <TypeName> [--top N]");
-        Console.WriteLine("refferedtotree <TypeName> [--levels N]");
-        Console.WriteLine("tquery [-short] [-debug] (-mt|-addr|-array|-implements) <address> (select|where)");
+        Console.WriteLine("!til.clruniqstack");
+        Console.WriteLine("!til.taskcallstack");
+        Console.WriteLine("!til.dumpconcurrentdict (!til.dcd) | -list [containsFilter] | -count");
+        Console.WriteLine("!til.dumpconcurrentqueue (!til.dcq) | -list [containsFilter]");
+        Console.WriteLine("!til.getmetodname (!til.gmn) [methodptr]");
+        Console.WriteLine("!til.tasks (!til.tks) -detail [state]");
+        Console.WriteLine("!til.blockinginfo");
+        Console.WriteLine("!til.decompilemethod -sp [address] | -ip [instructionPointer] | -md [methodDesc]");
+        Console.WriteLine("!til.clrstacksource [-tid <osThreadIdHex>]");
+        Console.WriteLine("!til.decompiletype [address] | -ad [address] | -nm [typeName] | -ip [ip] | -md [token] | -mt [methodTable]");
+        Console.WriteLine("!til.savemodule [modulename]");
+        Console.WriteLine("!til.buildobjectgraph");
+        Console.WriteLine("!til.retainedbytestat [--min-retained-bytes N]");
+        Console.WriteLine("!til.referredfrom <TypeName> [--top N]");
+        Console.WriteLine("!til.refferedtotree <TypeName> [--levels N]");
+        Console.WriteLine("!til.tquery [-short] [-debug] (-mt|-addr|-array|-implements) <address> (select|where)");
         Console.WriteLine();
         Console.WriteLine("Use !til.help <command> for detailed help on a specific command.");
 
@@ -83,7 +90,7 @@ public static unsafe class Extension
 
     private static void PrintTqueryHelp()
     {
-        Console.WriteLine("tquery [-short] [-debug] (-mt|-addr|-array|-implements) <address> (select <fields> [where <expr>] | where <expr>)");
+        Console.WriteLine("!til.tquery [-short] [-debug] (-mt|-addr|-array|-implements) <address> (select <fields> [where <expr>] | where <expr>)");
         Console.WriteLine();
         Console.WriteLine("  Source modes:");
         Console.WriteLine("    -mt <methodTable>       Query all heap objects with the given method table");
@@ -122,18 +129,18 @@ public static unsafe class Extension
         Console.WriteLine("    -debug                   Print debug/diagnostic output");
         Console.WriteLine();
         Console.WriteLine("  Examples:");
-        Console.WriteLine("    tquery -mt 00007ff8a1234560 select _name,_id");
-        Console.WriteLine("    tquery -mt 00007ff8a1234560 where _status == '1'");
-        Console.WriteLine("    tquery -mt 00007ff8a1234560 select _name where _status > '0' and _active == 'True'");
-        Console.WriteLine("    tquery -addr 0000020fa1234560 select *");
-        Console.WriteLine("    tquery -array 0000020fa1234560 select _value where _key =~ 'foo.*'");
-        Console.WriteLine("    tquery -implements MyNamespace.IMyInterface select _name");
-        Console.WriteLine("    tquery -short -mt 00007ff8a1234560 select _name");
+        Console.WriteLine("    !til.tquery -mt 00007ff8a1234560 select _name,_id");
+        Console.WriteLine("    !til.tquery -mt 00007ff8a1234560 where _status == '1'");
+        Console.WriteLine("    !til.tquery -mt 00007ff8a1234560 select _name where _status > '0' and _active == 'True'");
+        Console.WriteLine("    !til.tquery -addr 0000020fa1234560 select *");
+        Console.WriteLine("    !til.tquery -array 0000020fa1234560 select _value where _key =~ 'foo.*'");
+        Console.WriteLine("    !til.tquery -implements MyNamespace.IMyInterface select _name");
+        Console.WriteLine("    !til.tquery -short -mt 00007ff8a1234560 select _name");
     }
 
     private static void PrintDecompileMethodHelp()
     {
-        Console.WriteLine("decompilemethod -sp <address> | -ip <instructionPointer> | -md <methodDesc>");
+        Console.WriteLine("!til.decompilemethod -sp <address> | -ip <instructionPointer> | -md <methodDesc>");
         Console.WriteLine();
         Console.WriteLine("  Decompiles a managed method to C# source using ILSpy.");
         Console.WriteLine();
@@ -155,14 +162,37 @@ public static unsafe class Extension
         Console.WriteLine("    - Local objects on the stack frame (MethodTable, Address, Type)");
         Console.WriteLine();
         Console.WriteLine("  Examples:");
-        Console.WriteLine("    decompilemethod -sp 00000045B71FE100");
-        Console.WriteLine("    decompilemethod -ip 00007FF8A1C03B60");
-        Console.WriteLine("    decompilemethod -md 00007FF8A1B54EA0");
+        Console.WriteLine("    !til.decompilemethod -sp 00000045B71FE100");
+        Console.WriteLine("    !til.decompilemethod -ip 00007FF8A1C03B60");
+        Console.WriteLine("    !til.decompilemethod -md 00007FF8A1B54EA0");
+    }
+
+    private static void PrintClrStackSourceHelp()
+    {
+        Console.WriteLine("!til.clrstacksource [-tid <osThreadIdHex>]");
+        Console.WriteLine();
+        Console.WriteLine("  Walks managed stacks and prints decompiled C# for each frame.");
+        Console.WriteLine();
+        Console.WriteLine("  Options:");
+        Console.WriteLine("    -tid <osThreadIdHex>    Restrict output to a single OS thread id.");
+        Console.WriteLine();
+        Console.WriteLine("  Output:");
+        Console.WriteLine("    - OS thread id and managed thread id");
+        Console.WriteLine("    - Each stack frame (SP, IP, frame name, managed method)");
+        Console.WriteLine("    - Decompiled source for each managed frame, with the current");
+        Console.WriteLine("      line marked when IL offset mapping is available");
+        Console.WriteLine("    - A placeholder message for native/runtime frames that do not");
+        Console.WriteLine("      have managed source to decompile");
+        Console.WriteLine();
+        Console.WriteLine("  Examples:");
+        Console.WriteLine("    !til.clrstacksource");
+        Console.WriteLine("    !til.clrstacksource -tid 1A3C");
+        Console.WriteLine("    !til.clrstacksource -tid 0x1A3C");
     }
 
     private static void PrintDecompileTypeHelp()
     {
-        Console.WriteLine("decompiletype [address] | -ad <address> | -nm <typeName> | -ip <instructionPtr> | -md <metadataToken> | -mt <methodTable>");
+        Console.WriteLine("!til.decompiletype [address] | -ad <address> | -nm <typeName> | -ip <instructionPtr> | -md <metadataToken> | -mt <methodTable>");
         Console.WriteLine();
         Console.WriteLine("  Decompiles an entire managed type to C# source using ILSpy.");
         Console.WriteLine();
@@ -181,17 +211,17 @@ public static unsafe class Extension
         Console.WriteLine("                            table address.");
         Console.WriteLine();
         Console.WriteLine("  Examples:");
-        Console.WriteLine("    decompiletype 0000020FA1234560");
-        Console.WriteLine("    decompiletype -ad 0000020FA1234560");
-        Console.WriteLine("    decompiletype -nm System.Net.Http.HttpClient");
-        Console.WriteLine("    decompiletype -ip 00007FF8A1C03B60");
-        Console.WriteLine("    decompiletype -md 0x02000042");
-        Console.WriteLine("    decompiletype -mt 00007FF8A1234560");
+        Console.WriteLine("    !til.decompiletype 0000020FA1234560");
+        Console.WriteLine("    !til.decompiletype -ad 0000020FA1234560");
+        Console.WriteLine("    !til.decompiletype -nm System.Net.Http.HttpClient");
+        Console.WriteLine("    !til.decompiletype -ip 00007FF8A1C03B60");
+        Console.WriteLine("    !til.decompiletype -md 0x02000042");
+        Console.WriteLine("    !til.decompiletype -mt 00007FF8A1234560");
     }
 
     private static void PrintBuildObjectGraphHelp()
     {
-        Console.WriteLine("buildobjectgraph");
+        Console.WriteLine("!til.buildobjectgraph");
         Console.WriteLine();
         Console.WriteLine("  Builds a whole-heap object reference graph from the target process or dump,");
         Console.WriteLine("  then computes a dominator tree (Lengauer-Tarjan) and retained sizes.");
@@ -209,17 +239,17 @@ public static unsafe class Extension
         Console.WriteLine("    Nodes, Edges, Types, Total Size (bytes), Retained summaries count.");
         Console.WriteLine();
         Console.WriteLine("  Required before running:");
-        Console.WriteLine("    retainedbytestat, referredfrom, refferedtotree");
+        Console.WriteLine("    !til.retainedbytestat, !til.referredfrom, !til.refferedtotree");
         Console.WriteLine();
         Console.WriteLine("  Note: This can be slow and memory-intensive on large heaps.");
     }
 
     private static void PrintRetainedByteStatHelp()
     {
-        Console.WriteLine("retainedbytestat [--min-retained-bytes N]");
+        Console.WriteLine("!til.retainedbytestat [--min-retained-bytes N]");
         Console.WriteLine();
         Console.WriteLine("  Displays per-type retained byte statistics from the dominator tree.");
-        Console.WriteLine("  Requires: buildobjectgraph");
+        Console.WriteLine("  Requires: !til.buildobjectgraph");
         Console.WriteLine();
         Console.WriteLine("  For each type, shows the minimum retained bytes (the memory that would");
         Console.WriteLine("  become collectible if all instances of that type were removed) and the");
@@ -237,18 +267,18 @@ public static unsafe class Extension
         Console.WriteLine("  Results are sorted by Min Retained descending, then Bytes descending.");
         Console.WriteLine();
         Console.WriteLine("  Examples:");
-        Console.WriteLine("    retainedbytestat");
-        Console.WriteLine("    retainedbytestat --min-retained-bytes 0");
-        Console.WriteLine("    retainedbytestat --min-retained-bytes 10000000");
+        Console.WriteLine("    !til.retainedbytestat");
+        Console.WriteLine("    !til.retainedbytestat --min-retained-bytes 0");
+        Console.WriteLine("    !til.retainedbytestat --min-retained-bytes 10000000");
     }
 
     private static void PrintReferredFromHelp()
     {
-        Console.WriteLine("referredfrom <TypeName> [--top N]");
+        Console.WriteLine("!til.referredfrom <TypeName> [--top N]");
         Console.WriteLine();
         Console.WriteLine("  Shows which parent types hold direct references to instances of the");
         Console.WriteLine("  given type, ranked by total referenced bytes.");
-        Console.WriteLine("  Requires: buildobjectgraph");
+        Console.WriteLine("  Requires: !til.buildobjectgraph");
         Console.WriteLine();
         Console.WriteLine("  Finds all reachable objects matching <TypeName>, then walks their");
         Console.WriteLine("  incoming references (parents in the object graph) and aggregates");
@@ -268,18 +298,18 @@ public static unsafe class Extension
         Console.WriteLine("    ParentType  — fully-qualified parent type name");
         Console.WriteLine();
         Console.WriteLine("  Examples:");
-        Console.WriteLine("    referredfrom System.String");
-        Console.WriteLine("    referredfrom System.Byte[] --top 20");
-        Console.WriteLine("    referredfrom MyApp.Models.Customer");
+        Console.WriteLine("    !til.referredfrom System.String");
+        Console.WriteLine("    !til.referredfrom System.Byte[] --top 20");
+        Console.WriteLine("    !til.referredfrom MyApp.Models.Customer");
     }
 
     private static void PrintRefferedToTreeHelp()
     {
-        Console.WriteLine("refferedtotree <TypeName> [--levels N]");
+        Console.WriteLine("!til.refferedtotree <TypeName> [--levels N]");
         Console.WriteLine();
         Console.WriteLine("  Prints a tree of outgoing references from instances of the given type,");
         Console.WriteLine("  expanding child types level by level.");
-        Console.WriteLine("  Requires: buildobjectgraph");
+        Console.WriteLine("  Requires: !til.buildobjectgraph");
         Console.WriteLine();
         Console.WriteLine("  Starting from all reachable objects matching <TypeName>, walks outgoing");
         Console.WriteLine("  references in the object graph, aggregating children by type at each");
@@ -301,8 +331,8 @@ public static unsafe class Extension
         Console.WriteLine("  Results at each level are sorted by Bytes descending, then Refs descending.");
         Console.WriteLine();
         Console.WriteLine("  Examples:");
-        Console.WriteLine("    refferedtotree System.Net.Http.HttpClient");
-        Console.WriteLine("    refferedtotree MyApp.Cache.CacheEntry --levels 5");
+        Console.WriteLine("    !til.refferedtotree System.Net.Http.HttpClient");
+        Console.WriteLine("    !til.refferedtotree MyApp.Cache.CacheEntry --levels 5");
     }
 
     [UnmanagedCallersOnly(EntryPoint = "clruniqstack", CallConvs = new[] { typeof(CallConvStdcall) })]
@@ -512,6 +542,30 @@ public static unsafe class Extension
         return 0;
     }
     
+    [UnmanagedCallersOnly(EntryPoint = "clrstacksource", CallConvs = new[] { typeof(CallConvStdcall) })]
+    public static int ClrStackSource(nint pUnknown, nint args)
+    {
+        return _ClrStackSource(pUnknown, args);
+    }
+
+    private static readonly ClrStackSourceProvider ClrStackSourceProvider = new(new Decompiler(new DllExtractor()));
+    private static int _ClrStackSource(nint pUnknown, nint args)
+    {
+        try
+        {
+            ClrStackSourceCommand cmd = new(ClrStackSourceProvider, pUnknown);
+            string? arguments = Marshal.PtrToStringAnsi(args);
+            cmd.Run(arguments ?? "");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to run {nameof(ClrStackSourceCommand)} command.");
+            Console.Error.WriteLine(e);
+        }
+
+        return 0;
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "decompiletype", CallConvs = new[] { typeof(CallConvStdcall) })]
     public static int DecompileType(nint pUnknown, nint args)
     {
