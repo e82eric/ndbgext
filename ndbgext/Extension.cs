@@ -1,5 +1,6 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace ndbgext;
 
@@ -74,7 +75,7 @@ public static unsafe class Extension
         Console.WriteLine("!til.tasks (!til.tks) -detail [state]");
         Console.WriteLine("!til.blockinginfo");
         Console.WriteLine("!til.decompilemethod -sp [address] | -ip [instructionPointer] | -md [methodDesc]");
-        Console.WriteLine("!til.clrstacksource [-tid <osThreadIdHex>]");
+        Console.WriteLine("!til.clrstacksource [-tid <osThreadIdHex>] [-frames <start-end>] [-frameData]");
         Console.WriteLine("!til.decompiletype [address] | -ad [address] | -nm [typeName] | -ip [ip] | -md [token] | -mt [methodTable]");
         Console.WriteLine("!til.savemodule [modulename]");
         Console.WriteLine("!til.buildobjectgraph");
@@ -169,18 +170,26 @@ public static unsafe class Extension
 
     private static void PrintClrStackSourceHelp()
     {
-        Console.WriteLine("!til.clrstacksource [-tid <osThreadIdHex>]");
+        Console.WriteLine("!til.clrstacksource [-tid <osThreadIdHex>] [-frames <start-end>] [-frameData]");
         Console.WriteLine();
         Console.WriteLine("  Walks managed stacks and prints decompiled C# for each frame.");
+        Console.WriteLine("  Defaults to the debugger's current thread when -tid is omitted.");
         Console.WriteLine();
         Console.WriteLine("  Options:");
         Console.WriteLine("    -tid <osThreadIdHex>    Restrict output to a single OS thread id.");
+        Console.WriteLine("    -frames <start-end>     Decompile only an inclusive zero-based");
+        Console.WriteLine("                            frame range while still listing the full stack.");
+        Console.WriteLine("                            A single number is also allowed.");
+        Console.WriteLine("    -frameData              Print stack parameters/variables discovered");
+        Console.WriteLine("                            in the frame's stack range.");
         Console.WriteLine();
         Console.WriteLine("  Output:");
         Console.WriteLine("    - OS thread id and managed thread id");
-        Console.WriteLine("    - Each stack frame (SP, IP, frame name, managed method)");
+        Console.WriteLine("    - Each stack frame with its zero-based index");
         Console.WriteLine("    - Decompiled source for each managed frame, with the current");
         Console.WriteLine("      line marked when IL offset mapping is available");
+        Console.WriteLine("    - Optional frame data showing object references found in the");
+        Console.WriteLine("      stack range for that frame");
         Console.WriteLine("    - A placeholder message for native/runtime frames that do not");
         Console.WriteLine("      have managed source to decompile");
         Console.WriteLine();
@@ -188,6 +197,9 @@ public static unsafe class Extension
         Console.WriteLine("    !til.clrstacksource");
         Console.WriteLine("    !til.clrstacksource -tid 1A3C");
         Console.WriteLine("    !til.clrstacksource -tid 0x1A3C");
+        Console.WriteLine("    !til.clrstacksource -frames 0-5");
+        Console.WriteLine("    !til.clrstacksource -tid 1A3C -frames 2");
+        Console.WriteLine("    !til.clrstacksource -frames 0-2 -frameData");
     }
 
     private static void PrintDecompileTypeHelp()
@@ -543,12 +555,14 @@ public static unsafe class Extension
     }
     
     [UnmanagedCallersOnly(EntryPoint = "clrstacksource", CallConvs = new[] { typeof(CallConvStdcall) })]
+    [SupportedOSPlatform("windows")]
     public static int ClrStackSource(nint pUnknown, nint args)
     {
         return _ClrStackSource(pUnknown, args);
     }
 
     private static readonly ClrStackSourceProvider ClrStackSourceProvider = new(new Decompiler(new DllExtractor()));
+    [SupportedOSPlatform("windows")]
     private static int _ClrStackSource(nint pUnknown, nint args)
     {
         try

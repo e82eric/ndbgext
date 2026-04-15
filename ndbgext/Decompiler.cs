@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using ICSharpCode.Decompiler;
@@ -56,7 +56,7 @@ public class Decompiler
                 var sps = sequencePoints.First();
                 foreach (var offset in ilOffsets)
                 {
-                    var sp = FindSeqPointByOffset(offset, sps);
+                    var sp = FindSeqPointByOffset(offset, sps) ?? FindNearestPrecedingSeqPointByOffset(offset, sps);
                     if (sp != null && split.Length >= sp.StartLine)
                     {
                         if (nextMethodName != null && split[sp.StartLine - 1].Contains(nextMethodName))
@@ -225,6 +225,30 @@ public class Decompiler
         foreach (var point in first.Value)
         {
             if (ilOffset >= point.Offset && ilOffset <= point.EndOffset)
+            {
+                result = point;
+            }
+        }
+
+        return result;
+    }
+
+    private static SequencePoint? FindNearestPrecedingSeqPointByOffset(int ilOffset, KeyValuePair<ILFunction, List<SequencePoint>> first)
+    {
+        if (ilOffset < 0)
+        {
+            return null;
+        }
+
+        SequencePoint? result = null;
+        foreach (var point in first.Value)
+        {
+            if (point.Offset > ilOffset)
+            {
+                continue;
+            }
+
+            if (result == null || point.Offset > result.Offset)
             {
                 result = point;
             }

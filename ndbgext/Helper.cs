@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using Microsoft.Diagnostics.Runtime;
 
 namespace ndbgext;
@@ -152,5 +152,22 @@ public static class Helper
         else
             for (ulong ptr = stop; ptr >= start; ptr -= diff)
                 yield return ptr;
+    }
+
+    public static void WritePlainText(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        var normalized = text.Replace("\r\n", "\n");
+        var endsWithNewline = normalized.EndsWith('\n');
+        var lines = normalized.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (i == lines.Length - 1 && lines[i].Length == 0 && endsWithNewline)
+                break;
+
+            Console.WriteLine("{0}", lines[i].Replace("%", "%%"));
+        }
     }
 }

@@ -142,17 +142,22 @@ Decompiles a managed method to C# source using ILSpy.
 #### clrstacksource
 
 Walks managed stacks and prints decompiled C# source for each frame.
+Defaults to the debugger's current thread when `-tid` is omitted.
 
 ```
 !til.clrstacksource
 !til.clrstacksource -tid <osThreadIdHex>
+!til.clrstacksource -frames <start-end>
+!til.clrstacksource -frames <start-end> -frameData
 ```
 
 | Option | Description |
 |--------|-------------|
 | `-tid <osThreadIdHex>` | Restrict output to a single OS thread id. Accepts plain hex or `0x`-prefixed values. |
+| `-frames <start-end>` | Decompile only an inclusive zero-based frame range while still printing the full stack. A single frame number is also accepted. |
+| `-frameData` | Print stack parameters/variables discovered in the frame's stack range. |
 
-For each matching thread, prints the thread id, every stack frame, and the decompiled source for each managed frame. When IL-to-source mapping is available, the currently executing line is marked in the decompiled output. Native/runtime frames are shown with a placeholder instead of source.
+For each matching thread, prints the thread id and the full stack with zero-based frame indices. When `-frames` is supplied, only frames in that range include decompiled source and optional frame data; frames outside the range are still listed without source. When IL-to-source mapping is available, the currently executing line is marked in the decompiled output. With `-frameData`, the command also prints object references found in that frame's stack range as a raw view of likely parameters/locals. Native/runtime frames are shown with a placeholder instead of source.
 
 ---
 

@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using DbgEngExtension;
 using Microsoft.Diagnostics.Runtime;
 
@@ -121,7 +121,7 @@ public class DecompileMethodProvider
             PrintFrame(previousFrame, false);
             Console.WriteLine();
             var code = _decompiler.DecompileMethodWithCurrentLineIndicator(runtime, clrMethod, ilOffsets, nextFrame?.Method?.Name);
-            Console.WriteLine(code);
+            Helper.WritePlainText(code);
 
             if (previousFrame != null)
             {
@@ -207,7 +207,7 @@ public class DecompileMethodProvider
         if (method != null)
         {
             var code = _decompiler.DecompileMethod(runtime, method);
-            Console.WriteLine(code);
+            Helper.WritePlainText(code);
         }
     }
     
@@ -217,7 +217,7 @@ public class DecompileMethodProvider
         if (method != null)
         {
             var code = _decompiler.DecompileMethod(runtime, method);
-            Console.WriteLine(code);
+            Helper.WritePlainText(code);
         }
     }
 
